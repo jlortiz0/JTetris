@@ -124,6 +124,7 @@ class TetrisApp(object):
         def __init__(self):
                 pygame.init()
                 pygame.key.set_repeat(250,25)
+                self.siren=0
                 self.width = config['cell_size']*config['cols']
                 self.height = config['cell_size']*config['rows']
                 
@@ -143,9 +144,9 @@ class TetrisApp(object):
                                    self.stone,
                                    (self.stone_x, self.stone_y)):
                         self.gameover = True
-                        time.sleep(2)
                         pygame.mixer.music.stop()
                         play_sound("gameover.ogg")
+                        time.sleep(2)
         
         def init_game(self):
                 self.board = new_board()
@@ -214,10 +215,12 @@ class TetrisApp(object):
                                 if self.gameover:
                                         return
                                 for x in self.board[4]:
-                                        if x!=0:
+                                        if x!=0 and self.siren<1:
                                                 play_sound("siren.ogg")
+                                                self.siren=3
                                                 break
                                 times=0
+                                self.siren-=1
                                 while True:
                                         for i, row in enumerate(self.board[:-1]):
                                                 if 0 not in row:
