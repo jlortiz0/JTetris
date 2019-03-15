@@ -41,7 +41,8 @@ config = {
         'cols':         10,
         'rows':         18,
         'delay':        750,
-        'maxfps':       30
+        'maxfps':       30,
+        'debug':        -1
 }
 
 colors = [
@@ -53,6 +54,7 @@ colors = [
 (255, 255, 0  ),
 (180, 0,   255),
 (0,   220, 220),
+(255, 255, 255)
 ]
 
 # Define the shapes of the single parts
@@ -78,19 +80,21 @@ tetris_shapes = [
          [7, 7]]
 ]
 
-def rotate_clockwise(shape):
+def rotate_clockwise(shape, rot_center):
         if shape==tetris_shapes[6]:
-                return shape
-        return [ [ shape[y][x]
+                return (shape, rot_center)
+        rot_center.insert(0, rot_center.pop())
+        return ([ [ shape[y][x]
                         for y in range(len(shape)) ]
-                for x in range(len(shape[0])-1, -1, -1) ]
+                for x in range(len(shape[0])-1, -1, -1) ], rot_center)
 
-def rotate_counter(shape):
+def rotate_counter(shape, rot_center):
         if shape==tetris_shapes[6]:
-                return shape
-        return [ [ shape[y][x]
+                return (shape, rot_center)
+        rot_center.append(rot_center.pop(0))
+        return ([ [ shape[y][x]
                         for y in range(len(shape)-1, -1, -1) ]
-                for x in range(len(shape[0])) ]
+                for x in range(len(shape[0])) ], rot_center)
 
 def check_collision(board, shape, offset):
         off_x, off_y = offset
@@ -103,9 +107,19 @@ def check_collision(board, shape, offset):
                                 return True
         return False
 
-def remove_row(board, row, draw):
-        del board[row]
-        return [[0 for i in range(config['cols'])]] + board
+def remove_rows(board, rows, draw, screen):
+        for x in range(4):
+                for r in rows:
+                        if (x % 2) == 0:
+                                draw([[8 for i in range(config['cols'])]], (0, r))
+                        else:
+                                draw([board[r]], (0,r))
+                pygame.display.update()
+                time.sleep(0.2)
+        for r in rows:
+                del board[r]
+                board = [[0 for i in range(config['cols'])]] + board
+        return board
         
 def join_matrixes(mat1, mat2, mat2_off):
         off_x, off_y = mat2_off
@@ -136,17 +150,29 @@ class TetrisApp(object):
                 self.init_game()
         
         def new_stone(self):
-                self.stone = tetris_shapes[rand(len(tetris_shapes))]
+                if config['debug']==-1:
+                        self.stone = tetris_shapes[rand(len(tetris_shapes))]
+                else:
+                        self.stone=tetris_shapes[config['debug']]
                 self.stone_x = int(config['cols'] / 2 - len(self.stone[0])/2)
                 self.stone_y = 0
+                self.rot_center=[0,1,1,1]
+                if self.stone==tetris_shapes[5]:
+                        self.rot_center[2]=0
                 
-                if check_collision(self.board,
-                                   self.stone,
-                                   (self.stone_x, self.stone_y)):
+                if check_collision(self.board, self.stone, (self.stone_x, self.stone_y)):
+                        pygame.display.update()
                         self.gameover = True
                         pygame.mixer.music.stop()
                         play_sound("gameover.ogg")
-                        time.sleep(2)
+                        for x in range(5):
+                                if (x % 2)==0:
+                                        self.draw_matrix(self.stone, (self.stone_x, self.stone_y))
+                                else:
+                                        self.screen.fill((0, 0, 0))
+                                        self.draw_matrix(self.board, (0,0))
+                                pygame.display.update()
+                                time.sleep(0.4)
         
         def init_game(self):
                 self.board = new_board()
@@ -215,47 +241,41 @@ class TetrisApp(object):
                                 self.new_stone()
                                 if self.gameover:
                                         return
-                                for x in range(config['cols']):
-                                        if self.board[3][x]!=0:
-                                                if self.siren:
-                                                        break
+                                if self.board[3]!=[0 for x in range(config['cols'])]:
+                                        if not self.siren:     
                                                 pygame.mixer.music.stop()
                                                 pygame.mixer.music.load("danger.ogg")
                                                 pygame.mixer.music.play(-1)
                                                 self.siren=True
-                                                break
-                                        elif self.siren and x==config['cols']-1:
-                                                pygame.mixer.music.stop()
-                                                pygame.mixer.music.load("tetris.ogg")
-                                                pygame.mixer.music.play(-1)
-                                                self.siren=False
-                                                break
-                                times=0
-                                while True:
-                                        for i, row in enumerate(self.board[:-1]):
-                                                if 0 not in row:
-                                                        self.board = remove_row(
-                                                          self.board, i, self.draw_matrix)
-                                                        times+=1
-                                                        break
-                                        else:
-                                                break
-                                if times>3:
+                                elif self.siren:
+                                        pygame.mixer.music.stop()
+                                        pygame.mixer.music.load("tetris.ogg")
+                                        pygame.mixer.music.play(-1)
+                                        self.siren=False
+                                rows=[]
+                                for i in range(len(self.board[:-1])):
+                                        if 0 not in self.board[i]:
+                                                rows.append(i)
+                                if len(rows)>3:
                                         play_sound("4lines.ogg")
-                                elif times>0:
+                                elif len(rows)>0:
                                         play_sound("line.ogg")
+                                else:
+                                        return
+                                self.board=remove_rows(self.board, rows, self.draw_matrix, self.screen)
         
         def rotate_stone(self, direct):
                 if not self.gameover and not self.paused:
                         new_stone = None
-                        if direct==1:
-                                new_stone = rotate_clockwise(self.stone)
+                        if direct>0:
+                                new_stone, center = rotate_clockwise(self.stone, self.rot_center)
                         else:
-                                new_stone = rotate_counter(self.stone)
+                                new_stone, center = rotate_counter(self.stone, self.rot_center)
                         if not check_collision(self.board,
                                                new_stone,
                                                (self.stone_x, self.stone_y)):
                                 self.stone = new_stone
+                                self.rot_center = center
                                 play_sound("rotate.ogg")
         
         def toggle_pause(self):
