@@ -1,0 +1,4 @@
+build/*
+tetris.spec
+dist/*
+__pycache__/*

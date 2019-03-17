@@ -105,7 +105,6 @@ def check_collision(board, shape, offset):
         for cy, row in enumerate(shape):
                 for cx, cell in enumerate(row):
                         try:
-                                #print(cx, cy, cell, board[cy+off_y][cx+off_x], off_y, off_x)
                                 if cell and board[ cy + off_y ][ cx + off_x ]:
                                         return True
                         except IndexError:
@@ -140,7 +139,7 @@ def new_board():
         return board
 
 class TetrisApp(object):
-        def __init__(self):
+        def __init__(self, off_x, off_y):
                 pygame.init()
                 if config['music']:
                         pygame.mixer.init()
@@ -148,13 +147,16 @@ class TetrisApp(object):
                 pygame.key.set_repeat(250,25)
                 self.width = config['cell_size']*config['cols']
                 self.height = config['cell_size']*config['rows']
-                self.screen = display.subsurface(pygame.Rect(10, 10, self.width, self.height))
+                self.screen = display.subsurface(pygame.Rect(off_x, off_y, self.width, self.height))
                 pygame.event.set_blocked(pygame.MOUSEMOTION)
+                self.off_x=off_x//config['cell_size']
+                self.off_y=off_y//config['cell_size']
                 self.init_game()
         
         def new_stone(self):
                 if config['debug']==-1:
-                        self.stone = tetris_shapes[rand(len(tetris_shapes))]
+                        self.stone = self.next_stone
+                        self.next_stone=tetris_shapes[rand(len(tetris_shapes))]
                 else:
                         self.stone=tetris_shapes[config['debug']]
                 self.stone_x = int(config['cols'] / 2 - len(self.stone[0])/2)
@@ -163,7 +165,7 @@ class TetrisApp(object):
                 self.dropdelay = True
                 pygame.time.set_timer(pygame.USEREVENT+2, 250)
                 if self.stone==tetris_shapes[5]:
-                        self.rot_center[2]=2
+                        self.rot_center[2]=0
                 if check_collision(self.board, self.stone, (self.stone_x, self.stone_y)):
                         pygame.display.update()
                         self.gameover = True
@@ -182,6 +184,7 @@ class TetrisApp(object):
         def init_game(self):
                 self.play_song("dxa1.ogg")
                 self.board = new_board()
+                self.next_stone=tetris_shapes[rand(len(tetris_shapes))]
                 self.new_stone()
                 self.bgcolor=bg_colors[0]
                 self.lines=0
@@ -192,11 +195,11 @@ class TetrisApp(object):
         def level_up(self):
                 self.level+=1
                 play_sound("level.ogg")
-                self.speed-=25
+                self.speed-=22
                 if self.speed>0:
                         pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
                 if (self.level % 5)==0 and self.level/5<len(bg_colors)+1:
-                        self.bgcolor=bg_colors[int(self.level/5)]
+                        self.bgcolor=bg_colors[self.level//5]
 
         def play_song(self, song):
                 if not config['music'] or self._song==song:
@@ -217,12 +220,14 @@ class TetrisApp(object):
                           self.width // 2-msgim_center_x,
                           self.height // 2-msgim_center_y+i*22))
         
-        def draw_matrix(self, matrix, offset):
+        def draw_matrix(self, matrix, offset, screen=None):
+                if not screen:
+                        screen=self.screen
                 off_x, off_y  = offset
                 for y, row in enumerate(matrix):
                         for x, val in enumerate(row):
                                 if val:
-                                        self.screen.blit(tiles[val],((off_x+x) * config['cell_size'],
+                                        screen.blit(tiles[val],((off_x+x) * config['cell_size'],
                                                         (off_y+y) * config['cell_size'], 
                                                         ))
         
@@ -271,7 +276,7 @@ class TetrisApp(object):
                                         if self.board[x]!=[0 for x in range(config['cols'])]:
                                                 height=x
                                                 break
-                                if height<4:
+                                if height<3:
                                         self.play_song("danger.ogg")
                                 elif height<6:
                                         self.play_song("dxa3.ogg")
@@ -287,6 +292,34 @@ class TetrisApp(object):
                                 new_stone, center = rotate_clockwise(self.stone, self.rot_center.copy())
                         else:
                                 new_stone, center = rotate_counter(self.stone, self.rot_center.copy())
+                        if len(new_stone)==1:
+                                for x in range(len(new_stone[0])):
+                                        if new_stone[0][x]==10:
+                                                if x==0:
+                                                        new_stone[0][x]=7
+                                                else:
+                                                        new_stone[0][x]=9
+                                        elif new_stone[0][x]==11:
+                                                new_stone[0][x]=8
+                                        elif new_stone[0][x]==12:
+                                                if x==0:
+                                                        new_stone[0][x]=7
+                                                else:
+                                                        new_stone[0][x]=9
+                        elif len(new_stone[0])==1:
+                                for x in range(len(new_stone)):
+                                        if new_stone[x][0]==7:
+                                                if x==0:
+                                                        new_stone[x]=[12]
+                                                else:
+                                                        new_stone[x]=[10]
+                                        elif new_stone[x][0]==8:
+                                                new_stone[x]=[11]
+                                        elif new_stone[x][0]==9:
+                                                if x==0:
+                                                        new_stone[x]=[12]
+                                                else:
+                                                        new_stone[x]=[10]
                         if not check_collision(self.board,
                                                new_stone,
                                                (self.stone_x+self.rot_center[1]-center[1], self.stone_y+self.rot_center[0]-center[0])):
@@ -334,7 +367,12 @@ class TetrisApp(object):
                 
                 self.gameover = False
                 self.paused = False
+                bgscroll=pygame.Surface((config['cell_size']*(config['cols']+11), self.height+config['cell_size']))
+                self.draw_matrix([ [ 15+((x+y)%2) for x in range(config['cols']+11) ] for y in range(config['rows']+config['cell_size'])
+                        ], (0,0), bgscroll)
+                bgoffset=0
                 
+                pygame.time.set_timer(pygame.USEREVENT+3, 250)
                 dont_burn_my_cpu = pygame.time.Clock()
                 while 1:
                         if self.gameover:
@@ -343,6 +381,10 @@ class TetrisApp(object):
                                 if self.paused:
                                         self.center_msg("Paused")
                                 else:
+                                        display.blit(bgscroll, (bgoffset*config['cell_size']//4, bgoffset*config['cell_size']//4))
+                                        self.draw_matrix(self.next_stone, (self.off_x+config['cols']+3, self.off_y+3), display)
+                                        self.draw_matrix([[14] for _ in range(config['rows'])], (1,0), display)
+                                        self.draw_matrix([[14] for _ in range(config['rows'])], (config['cols']+self.off_x,0), display)
                                         self.screen.fill(self.bgcolor)
                                         self.draw_matrix(self.board, (0,0))
                                         self.draw_matrix(self.stone,
@@ -356,6 +398,8 @@ class TetrisApp(object):
                                 elif event.type == pygame.USEREVENT+2:
                                         self.dropdelay=False
                                         pygame.time.set_timer(pygame.USEREVENT+2, 0)
+                                elif event.type == pygame.USEREVENT+3:
+                                        bgoffset = (bgoffset-1) % -4
                                 elif event.type == pygame.QUIT:
                                         self.quit()
                                 elif event.type == pygame.KEYDOWN:
@@ -378,15 +422,19 @@ def play_sound(path):
         sound.play()
 
 if __name__ == '__main__':
-        display = pygame.display.set_mode((config['cell_size']*config['cols']+20, config['cell_size']*config['rows']+20))
+        display = pygame.display.set_mode((config['cell_size']*(config['cols']+10), config['cell_size']*config['rows']))
         tileset = pygame.image.load("tileset.png").convert()
-        for y in range(3):
-                for x in range(3):
+        for y in range(tileset.get_height()//8):
+                for x in range(tileset.get_width()//8):
                    tiles.append(pygame.transform.scale(tileset.subsurface((8*x, 8*y, 8, 8)), (config['cell_size'],config['cell_size'])))
         del tileset
         for x in range(7, 10):
-                tiles.append(pygame.transform.rotate(tiles[x], 90))
-        tiles.append(pygame.Surface((config['cell_size'],config['cell_size'])))
+                tiles.insert(x+3, pygame.transform.rotate(tiles[x], 90))
+        tiles.insert(13, pygame.Surface((config['cell_size'],config['cell_size'])))
         tiles[13].fill((255,255,255))
-        App = TetrisApp()
+        if config['debug']>-1:
+                for x in range(1, len(tiles)):
+                        display.blit(tiles[x], (0, x*config['cell_size']))
+                pygame.display.update()
+        App = TetrisApp(config['cell_size']*2, 0)
         App.run()
