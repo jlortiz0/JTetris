@@ -372,7 +372,7 @@ class TetrisApp(object):
                         ], (0,0), bgscroll)
                 bgoffset=0
                 
-                pygame.time.set_timer(pygame.USEREVENT+3, 250)
+                pygame.time.set_timer(pygame.USEREVENT+3, 100)
                 dont_burn_my_cpu = pygame.time.Clock()
                 while 1:
                         if self.gameover:
@@ -381,7 +381,8 @@ class TetrisApp(object):
                                 if self.paused:
                                         self.center_msg("Paused")
                                 else:
-                                        display.blit(bgscroll, (bgoffset*config['cell_size']//4, bgoffset*config['cell_size']//4))
+                                        display.blit(bgscroll, (bgoffset, bgoffset))
+                                        self.draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (self.off_x+config['cols']+2, self.off_y+2), display)
                                         self.draw_matrix(self.next_stone, (self.off_x+config['cols']+3, self.off_y+3), display)
                                         self.draw_matrix([[14] for _ in range(config['rows'])], (1,0), display)
                                         self.draw_matrix([[14] for _ in range(config['rows'])], (config['cols']+self.off_x,0), display)
@@ -399,7 +400,7 @@ class TetrisApp(object):
                                         self.dropdelay=False
                                         pygame.time.set_timer(pygame.USEREVENT+2, 0)
                                 elif event.type == pygame.USEREVENT+3:
-                                        bgoffset = (bgoffset-1) % -4
+                                        bgoffset = (bgoffset-1) % -config['cell_size']
                                 elif event.type == pygame.QUIT:
                                         self.quit()
                                 elif event.type == pygame.KEYDOWN:
@@ -432,9 +433,14 @@ if __name__ == '__main__':
                 tiles.insert(x+3, pygame.transform.rotate(tiles[x], 90))
         tiles.insert(13, pygame.Surface((config['cell_size'],config['cell_size'])))
         tiles[13].fill((255,255,255))
+        tiles.insert(15, pygame.Surface((config['cell_size'],config['cell_size'])))
+        tiles[15].fill((17, 83, 18))
+        tiles.insert(16, pygame.Surface((config['cell_size'],config['cell_size'])))
+        tiles[16].fill((135, 168, 123))
         if config['debug']>-1:
                 for x in range(1, len(tiles)):
                         display.blit(tiles[x], (0, x*config['cell_size']))
                 pygame.display.update()
+                time.sleep(3)
         App = TetrisApp(config['cell_size']*2, 0)
         App.run()
