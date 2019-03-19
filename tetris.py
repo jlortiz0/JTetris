@@ -6,9 +6,10 @@
 # Control keys:
 # Down - Drop stone faster
 # Left/Right - Move stone
-# Up - Rotate Stone clockwise
+# Z - Rotate Stone clockwise
+# X - Rotate Stone counterclockwise
 # Escape - Quit game
-# P - Pause game
+# Enter - Pause game
 #
 # Have fun!
 
@@ -32,8 +33,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-from random import randrange as rand
-import pygame, sys, os, time
+import pygame, sys, os, time, random
 
 # The configuration
 config = {
@@ -44,10 +44,26 @@ config = {
         'maxfps':       30,
         'music':        True,
         'sound':        True,
-        'debug':        -1
+        'debug':        False
 }
 
+display = pygame.display.set_mode((config['cell_size']*(20), config['cell_size']*18))
+pygame.display.set_caption("Tetris DX")
 tiles = [None]
+
+tileset = pygame.image.load("tileset.png").convert()
+for y in range(tileset.get_height()//8):
+        for x in range(tileset.get_width()//8):
+                tiles.append(pygame.transform.scale(tileset.subsurface((8*x, 8*y, 8, 8)), (config['cell_size'],config['cell_size'])))
+del tileset
+for x in range(7, 10):
+        tiles.insert(x+3, pygame.transform.rotate(tiles[x], 90))
+tiles.insert(13, pygame.Surface((config['cell_size'],config['cell_size'])))
+tiles[13].fill((255,255,255))
+tiles.insert(15, pygame.Surface((config['cell_size'],config['cell_size'])))
+tiles[15].fill((17, 83, 18))
+tiles.insert(16, pygame.Surface((config['cell_size'],config['cell_size'])))
+tiles[16].fill((135, 168, 123))
 
 bg_colors = [
 (255, 238, 0  ),
@@ -100,7 +116,7 @@ def rotate_counter(shape, rot_center):
 
 def check_collision(board, shape, offset):
         off_x, off_y = offset
-        if not -1<off_x<config['cols']:
+        if not -1<off_x<10:
                 return True
         for cy, row in enumerate(shape):
                 for cx, cell in enumerate(row):
@@ -110,20 +126,6 @@ def check_collision(board, shape, offset):
                         except IndexError:
                                 return True
         return False
-
-def remove_rows(board, rows, draw, screen):
-        for x in range(4):
-                for r in rows:
-                        if (x % 2) == 0:
-                                draw([[13 for i in range(config['cols'])]], (0, r))
-                        else:
-                                draw([board[r]], (0,r))
-                pygame.display.update()
-                time.sleep(0.2)
-        for r in rows:
-                del board[r]
-                board = [[0 for i in range(config['cols'])]] + board
-        return board
         
 def join_matrixes(mat1, mat2, mat2_off):
         off_x, off_y = mat2_off
@@ -133,20 +135,27 @@ def join_matrixes(mat1, mat2, mat2_off):
         return mat1
 
 def new_board():
-        board = [ [ 0 for x in range(config['cols']) ]
-                        for y in range(config['rows']) ]
-        board += [[ 1 for x in range(config['cols'])]]
+        board = [ [ 0 for x in range(10) ]
+                        for y in range(18) ]
+        board += [[ 1 for x in range(10)]]
         return board
+
+def draw_matrix(matrix, offset, screen):
+                off_x, off_y  = offset
+                for y, row in enumerate(matrix):
+                        for x, val in enumerate(row):
+                                if val:
+                                        screen.blit(tiles[val],((off_x+x) * config['cell_size'],
+                                                        (off_y+y) * config['cell_size']))
 
 class TetrisApp(object):
         def __init__(self, off_x, off_y):
                 pygame.init()
                 if config['music']:
                         pygame.mixer.init()
-                        self._song=""
                 pygame.key.set_repeat(250,25)
-                self.width = config['cell_size']*config['cols']
-                self.height = config['cell_size']*config['rows']
+                self.width = config['cell_size']*10
+                self.height = config['cell_size']*18
                 self.screen = display.subsurface(pygame.Rect(off_x, off_y, self.width, self.height))
                 pygame.event.set_blocked(pygame.MOUSEMOTION)
                 self.off_x=off_x//config['cell_size']
@@ -154,12 +163,12 @@ class TetrisApp(object):
                 self.init_game()
         
         def new_stone(self):
-                if config['debug']==-1:
-                        self.stone = self.next_stone
-                        self.next_stone=tetris_shapes[rand(len(tetris_shapes))]
+                self.stone=self.next_stone
+                if config['debug']:
+                        self.next_stone=tetris_shapes[(tetris_shapes.index(self.stone)+1) % len(tetris_shapes)]
                 else:
-                        self.stone=tetris_shapes[config['debug']]
-                self.stone_x = int(config['cols'] / 2 - len(self.stone[0])/2)
+                        self.next_stone=random.choice(tetris_shapes)
+                self.stone_x = int(10 / 2 - len(self.stone[0])/2)
                 self.stone_y = 0
                 self.rot_center=[0,1,1,1]
                 self.dropdelay = True
@@ -173,22 +182,28 @@ class TetrisApp(object):
                         play_sound("gameover.ogg")
                         for x in range(5):
                                 if (x % 2)==0:
-                                        self.draw_matrix(self.stone, (self.stone_x, self.stone_y))
+                                        draw_matrix(self.stone, (self.stone_x, self.stone_y), self.screen)
                                 else:
                                         self.screen.fill(self.bgcolor)
-                                        self.draw_matrix(self.board, (0,0))
+                                        draw_matrix(self.board, (0,0), self.screen)
                                 pygame.display.update()
                                 time.sleep(0.4)
                         self.screen.fill((0,0,0))
         
         def init_game(self):
-                self.play_song("dxa1.ogg")
+                global _song
+                _song=None
+                play_song("dxa1.ogg")
                 self.board = new_board()
-                self.next_stone=tetris_shapes[rand(len(tetris_shapes))]
+                if config['debug']:
+                        self.next_stone=tetris_shapes[0]
+                else:
+                        self.next_stone=random.choice(tetris_shapes)
                 self.new_stone()
                 self.bgcolor=bg_colors[0]
                 self.lines=0
                 self.level=0
+                self.score=0
                 self.speed=config['delay']
                 pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
 
@@ -200,14 +215,6 @@ class TetrisApp(object):
                         pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
                 if (self.level % 5)==0 and self.level/5<len(bg_colors)+1:
                         self.bgcolor=bg_colors[self.level//5]
-
-        def play_song(self, song):
-                if not config['music'] or self._song==song:
-                        return
-                self._song=song
-                pygame.mixer.music.stop()
-                pygame.mixer.music.load(song)
-                pygame.mixer.music.play(-1)
         
         def center_msg(self, msg):
                 for i, line in enumerate(msg.splitlines()):
@@ -220,24 +227,13 @@ class TetrisApp(object):
                           self.width // 2-msgim_center_x,
                           self.height // 2-msgim_center_y+i*22))
         
-        def draw_matrix(self, matrix, offset, screen=None):
-                if not screen:
-                        screen=self.screen
-                off_x, off_y  = offset
-                for y, row in enumerate(matrix):
-                        for x, val in enumerate(row):
-                                if val:
-                                        screen.blit(tiles[val],((off_x+x) * config['cell_size'],
-                                                        (off_y+y) * config['cell_size'], 
-                                                        ))
-        
         def move(self, delta_x):
                 if not self.gameover and not self.paused:
                         new_x = self.stone_x + delta_x
                         if new_x < 0:
                                 new_x = 0
-                        if new_x > config['cols'] - len(self.stone[0]):
-                                new_x = config['cols'] - len(self.stone[0])
+                        if new_x > 10 - len(self.stone[0]):
+                                new_x = 10 - len(self.stone[0])
                         if not check_collision(self.board, self.stone,(new_x, self.stone_y)):
                                 self.stone_x = new_x
         def quit(self):
@@ -246,9 +242,11 @@ class TetrisApp(object):
                 pygame.quit()
                 sys.exit()
         
-        def drop(self):
+        def drop(self, si=False):
                 if not (self.gameover or self.paused or self.dropdelay):
                         self.stone_y += 1
+                        if si:
+                                self.score+=1
                         if check_collision(self.board,
                                            self.stone,
                                            (self.stone_x, self.stone_y)):
@@ -261,30 +259,47 @@ class TetrisApp(object):
                                 for i in range(len(self.board[:-1])):
                                         if 0 not in self.board[i]:
                                                 rows.append(i)
-                                if len(rows)>3:
-                                        play_sound("4lines.ogg")
-                                elif len(rows)>0:
-                                        play_sound("line.ogg")
                                 if len(rows)>0:
-                                        if (self.lines % 10)+len(rows)>9:
-                                                self.level_up()
                                         self.lines+=len(rows)
                                         self.screen.fill(self.bgcolor)
-                                        self.draw_matrix(self.board, (0,0))
-                                        self.board=remove_rows(self.board, rows, self.draw_matrix, self.screen)
+                                        draw_matrix(self.board, (0,0), self.screen)
+                                        self.remove_rows(rows)
+                                        if ((self.lines-len(rows)) % 10)+len(rows)>9:
+                                                self.level_up()
                                 for x in range(len(self.board)):
-                                        if self.board[x]!=[0 for x in range(config['cols'])]:
+                                        if self.board[x]!=[0 for x in range(10)]:
                                                 height=x
                                                 break
                                 if height<3:
-                                        self.play_song("danger.ogg")
+                                        play_song("danger.ogg")
                                 elif height<6:
-                                        self.play_song("dxa3.ogg")
+                                        play_song("dxa3.ogg")
                                 elif height<9:
-                                        self.play_song("dxa2.ogg")
+                                        play_song("dxa2.ogg")
                                 else:
-                                        self.play_song("dxa1.ogg")
+                                        play_song("dxa1.ogg")
                                 self.new_stone()
+
+                                
+        def remove_rows(self, rows):
+                self.stone=[]
+                if len(rows)>3:
+                        play_sound("4lines.ogg")
+                else:
+                        play_sound("line.ogg")
+                pygame.time.set_timer(pygame.USEREVENT+3, 0)
+                for x in range(16):
+                        self.bgoffset = (self.bgoffset-len(rows)*1.5) % -config['cell_size']
+                        self.draw()
+                        for r in rows:
+                                if (x//4 % 2) == 0:
+                                        draw_matrix([[13 for i in range(10)]], (0, r), self.screen)
+                        pygame.display.update()
+                        time.sleep(0.05)
+                for r in rows:
+                        del self.board[r]
+                        self.board = [[0 for i in range(10)]] + self.board
+                pygame.time.set_timer(pygame.USEREVENT+3, 100)
         
         def rotate_stone(self, direct):
                 if not self.gameover and not self.paused:
@@ -351,13 +366,28 @@ class TetrisApp(object):
                         self.init_game()
                         self.gameover = False
                         self.paused = False
+
+        def draw(self):
+                display.blit(self.bgscroll, (self.bgoffset, self.bgoffset))
+                display.blit(self.UI, (config['cell_size']*10, 0))
+                draw_matrix(self.next_stone, (self.off_x+13, self.off_y+3), display)
+                if self.score>9999999:
+                        self.score=9999999
+                display.blit(pygame.font.Font("joystix.ttf", 18).render(str(self.score), False, (0,0,0)), (config['cell_size']*16.3, config['cell_size']*9.1))
+                display.blit(pygame.font.Font("joystix.ttf", 18).render(str(self.level), False, (0,0,0)), (config['cell_size']*16.3, config['cell_size']*11.1))
+                display.blit(pygame.font.Font("joystix.ttf", 18).render(str(self.lines), False, (0,0,0)), (config['cell_size']*16.3, config['cell_size']*13.1))
+                draw_matrix([[14] for _ in range(18)], (self.off_x-1,0), display)
+                draw_matrix([[14] for _ in range(18)], (10+self.off_x,0), display)
+                self.screen.fill(self.bgcolor)
+                draw_matrix(self.board, (0,0), self.screen)
+                draw_matrix(self.stone,(self.stone_x, self.stone_y-0.075), self.screen)
         
         def run(self):
                 key_actions = {
                         'ESCAPE':       self.quit,
                         'LEFT':         lambda:self.move(-1),
                         'RIGHT':        lambda:self.move(+1),
-                        'DOWN':         self.drop,
+                        'DOWN':         lambda:self.drop(True),
                         'z':            lambda:self.rotate_stone(-1),
                         'x':            lambda:self.rotate_stone(+1),
                         'RETURN':       self.toggle_pause,
@@ -367,10 +397,22 @@ class TetrisApp(object):
                 
                 self.gameover = False
                 self.paused = False
-                bgscroll=pygame.Surface((config['cell_size']*(config['cols']+11), self.height+config['cell_size']))
-                self.draw_matrix([ [ 15+((x+y)%2) for x in range(config['cols']+11) ] for y in range(config['rows']+config['cell_size'])
-                        ], (0,0), bgscroll)
-                bgoffset=0
+                
+                self.bgscroll=pygame.Surface((config['cell_size']*21, config['cell_size']*19))
+                draw_matrix([ [ 15+((x+y)%2) for x in range(21) ] for y in range(18+config['cell_size'])
+                ], (0,0), self.bgscroll)
+                self.bgoffset=0
+                self.UI=pygame.Surface((config['cell_size']*16, config['cell_size']*19))
+                self.UI.fill((128,128,128))
+                self.UI.set_colorkey((128,128,128))
+                draw_matrix([[14] for _ in range(18)], (self.off_x,0), display)
+                draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (self.off_x+2, self.off_y+2), self.UI)
+                draw_matrix([[13 for _ in range(7)]], (self.off_x+1, self.off_y+9), self.UI)
+                self.UI.blit(pygame.font.Font("joystix.ttf", 18).render("Score:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+9.1)*config['cell_size']))
+                draw_matrix([[13 for _ in range(7)]], (self.off_x+1, self.off_y+11), self.UI)
+                self.UI.blit(pygame.font.Font("joystix.ttf", 18).render("Level:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+11.1)*config['cell_size']))
+                draw_matrix([[13 for _ in range(7)]], (self.off_x+1, self.off_y+13), self.UI)
+                self.UI.blit(pygame.font.Font("joystix.ttf", 18).render("Lines:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+13.1)*config['cell_size']))
                 
                 pygame.time.set_timer(pygame.USEREVENT+3, 100)
                 dont_burn_my_cpu = pygame.time.Clock()
@@ -381,16 +423,8 @@ class TetrisApp(object):
                                 if self.paused:
                                         self.center_msg("Paused")
                                 else:
-                                        display.blit(bgscroll, (bgoffset, bgoffset))
-                                        self.draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (self.off_x+config['cols']+2, self.off_y+2), display)
-                                        self.draw_matrix(self.next_stone, (self.off_x+config['cols']+3, self.off_y+3), display)
-                                        self.draw_matrix([[14] for _ in range(config['rows'])], (1,0), display)
-                                        self.draw_matrix([[14] for _ in range(config['rows'])], (config['cols']+self.off_x,0), display)
-                                        self.screen.fill(self.bgcolor)
-                                        self.draw_matrix(self.board, (0,0))
-                                        self.draw_matrix(self.stone,
-                                                         (self.stone_x,
-                                                          self.stone_y))
+                                        self.draw()
+                
                         pygame.display.update()
                         
                         for event in pygame.event.get():
@@ -400,7 +434,7 @@ class TetrisApp(object):
                                         self.dropdelay=False
                                         pygame.time.set_timer(pygame.USEREVENT+2, 0)
                                 elif event.type == pygame.USEREVENT+3:
-                                        bgoffset = (bgoffset-1) % -config['cell_size']
+                                        self.bgoffset = (self.bgoffset-1) % -config['cell_size']
                                 elif event.type == pygame.QUIT:
                                         self.quit()
                                 elif event.type == pygame.KEYDOWN:
@@ -422,24 +456,20 @@ def play_sound(path):
                 sound_library[path]=sound
         sound.play()
 
+_song=None
+def play_song(song):
+        global _song
+        if not config['music'] or _song==song:
+                return
+        _song=song
+        pygame.mixer.music.stop()
+        pygame.mixer.music.load(song)
+        pygame.mixer.music.play(-1)
+
 if __name__ == '__main__':
-        display = pygame.display.set_mode((config['cell_size']*(config['cols']+10), config['cell_size']*config['rows']))
-        tileset = pygame.image.load("tileset.png").convert()
-        for y in range(tileset.get_height()//8):
-                for x in range(tileset.get_width()//8):
-                   tiles.append(pygame.transform.scale(tileset.subsurface((8*x, 8*y, 8, 8)), (config['cell_size'],config['cell_size'])))
-        del tileset
-        for x in range(7, 10):
-                tiles.insert(x+3, pygame.transform.rotate(tiles[x], 90))
-        tiles.insert(13, pygame.Surface((config['cell_size'],config['cell_size'])))
-        tiles[13].fill((255,255,255))
-        tiles.insert(15, pygame.Surface((config['cell_size'],config['cell_size'])))
-        tiles[15].fill((17, 83, 18))
-        tiles.insert(16, pygame.Surface((config['cell_size'],config['cell_size'])))
-        tiles[16].fill((135, 168, 123))
-        if config['debug']>-1:
+        if config['debug']:
                 for x in range(1, len(tiles)):
-                        display.blit(tiles[x], (0, x*config['cell_size']))
+                        display.blit(tiles[x], (0, (x-1)*config['cell_size']))
                 pygame.display.update()
                 time.sleep(3)
         App = TetrisApp(config['cell_size']*2, 0)
