@@ -504,8 +504,6 @@ def fade_out():
                 dont_burn_my_cpu.tick(config['maxfps'])
 
 def fade_in(surf, off_x=0, off_y=0):
-        #fadebg = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
-        #fadebg.blit(surf, (0,0))
         fadebg = surf.copy()
         fadeeffect = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
         fadeeffect.fill((255,255,255))
@@ -518,24 +516,41 @@ def fade_in(surf, off_x=0, off_y=0):
         pygame.time.set_timer(pygame.USEREVENT+3, 100)
 
 class TetrisMenu(object):
-        def __init__(self):
+        def __init__(self, menu=["1 player"], actions=["BEGIN"]):
                 pygame.time.set_timer(pygame.USEREVENT+3, 100)
                 self.quit=False
-                self.menuid=0
+                self.menu=menu
+                self.actions=actions
+                self.selected=0
 
         def draw(self):
-                if self.menuid==0:
-                        display.blit(bgscroll, (bgoffset, bgoffset))
+                display.blit(bgscroll, (bgoffset, bgoffset))
+                start=8-len(self.menu)//2
+                longest=0
+                for x in self.menu:
+                        if longest<len(x):
+                                longest=len(x)
+                length=10-longest//2
+                for x in range(len(self.menu)):
+                        draw_matrix([[13 for _ in range(longest//2+2)]], (length, start), display)
+                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.menu[x], False, (0,0,0)), ((length+1)*config['cell_size'], start*config['cell_size']))
 
         def handle_key(self, key):
                 global bgoffset
                 if key=='return':
-                        fade_out()
-                        TetrisApp(config['cell_size']*2, 0).run()
-                        time.sleep(0.1)
-                        fade_in(bgscroll, bgoffset, bgoffset)
+                        if self.actions[self.selected]=="BEGIN":
+                                fade_out()
+                                TetrisApp(config['cell_size']*2, 0).run()
+                                time.sleep(0.1)
+                                fade_in(bgscroll, bgoffset, bgoffset)
                 elif key=='escape':
                         self.quit=True
+                elif key=='up':
+                        self.selected = (self.selected+1) % len(self.menu)
+                elif key=='down':
+                        self.selected-=1
+                        if self.selected<0:
+                                self.selected=len(self.menu)-1
         
         def run(self):
                 global bgoffset
