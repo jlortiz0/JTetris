@@ -566,11 +566,14 @@ class TetrisMenu(TetrisClass):
                                 fade_in(bgscroll, bgoffset, bgoffset)
                         elif self.actions[self.selected]=="QUIT":
                                 self.quit=True
-                        elif isinstance(self.actions[self.selected], list):
+                        elif isinstance(self.actions[self.selected], list) or isinstance(self.actions[self.selected], tuple):
+                                fade_out()
                                 if self.actions[self.selected][0]=="App":
                                         TetrisApp(*self.actions[self.selected][1:]).run()
                                 else:
                                         TetrisMenu(*self.actions[self.selected]).run()
+                                time.sleep(0.1)
+                                fade_in(bgscroll, bgoffset, bgoffset)
                 elif key=='escape' or key=='x':
                         self.quit=True
                 elif key=='down':
@@ -621,7 +624,7 @@ if __name__ == '__main__':
         menu = TetrisMenu([], [])
         onepLevelSel = TetrisMenu([], [])
         for x in range(9):
-                onepLevelSel.add("Level "+str(x), TetrisApp(config['cell_size']*2, 0, x))
+                onepLevelSel.add("Level "+str(x), ("App", config['cell_size']*2, 0, x))
         onepLevelSel.add("Back", "QUIT")
         menu.add("1 Player", onepLevelSel)
         menu.add("Quit", "QUIT")
