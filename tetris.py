@@ -43,7 +43,7 @@ config = {
         'heights':      (19, 10, 7, 3),
         'music':        True,
         'sound':        True,
-        'debug':        True
+        'debug':        False
 }
 
 display = pygame.display.set_mode((config['cell_size']*(20), config['cell_size']*18))
@@ -119,7 +119,16 @@ speeds = [
         50, 50, 50,
         33
 ]
-        
+
+class TetrisClass(object):
+        def draw(self):
+                raise NotImplemented
+
+        def run(self):
+                raise NotImplemented
+
+        def copy(self):
+                return TetrisClass()
 
 def rotate_clockwise(shape, rot_center):
         if shape==tetris_shapes[6]:
@@ -171,8 +180,8 @@ def draw_matrix(matrix, offset, screen):
                                         screen.blit(tiles[val],((off_x+x) * config['cell_size'],
                                                         (off_y+y) * config['cell_size']))
 
-class TetrisApp(object):
-        def __init__(self, off_x, off_y):
+class TetrisApp(TetrisClass):
+        def __init__(self, off_x, off_y, level=0):
                 self.width = config['cell_size']*10
                 self.height = config['cell_size']*18
                 self.screen = display.subsurface(pygame.Rect(off_x, off_y, self.width, self.height))
@@ -185,13 +194,15 @@ class TetrisApp(object):
                 else:
                         self.next_stone=[random.choice(tetris_shapes), random.choice(tetris_shapes)]
                 self.new_stone()
-                self.bgcolor=bg_colors[0]
                 self.lines=0
-                self.level=0
+                self.level=level
+                self.startlevel=level
+                self.bgcolor=bg_colors[self.level//5]
                 self.score=0
-                self.speed=speeds[0]
-                pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
-                self.held={}
+                self.speed=speeds[self.level]
+
+        def copy(self):
+                return TetrisApp(self.off_x*config['cell_size'], self.off_y*config['cell_size'], self.startlevel)
         
         def new_stone(self):
                 self.stone=self.next_stone.pop(0)
@@ -442,6 +453,7 @@ class TetrisApp(object):
 
                 self.draw()
                 fade_in(display)
+                pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
                 pygame.time.set_timer(pygame.USEREVENT+3, 100)
                 while 1:
                         if self.gameover:
@@ -515,13 +527,19 @@ def fade_in(surf, off_x=0, off_y=0):
                 dont_burn_my_cpu.tick(config['maxfps'])
         pygame.time.set_timer(pygame.USEREVENT+3, 100)
 
-class TetrisMenu(object):
+class TetrisMenu(TetrisClass):
         def __init__(self, menu, actions):
-                pygame.time.set_timer(pygame.USEREVENT+3, 100)
                 self.quit=False
                 self.menu=menu
                 self.actions=actions
                 self.selected=0
+
+        def add(self, option, action):
+                self.menu.append(option)
+                self.actions.append(action)
+
+        def copy(self):
+                return TetrisMenu(self.menu, self.actions)
 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
@@ -540,24 +558,34 @@ class TetrisMenu(object):
         def handle_key(self, key):
                 global bgoffset
                 if key=='return' or key=='z':
-                        if self.actions[self.selected]=="1P":
+                        if isinstance(self.actions[self.selected], TetrisClass):
                                 fade_out()
-                                TetrisApp(config['cell_size']*2, 0).run()
+                                self.actions[self.selected].run()
+                                self.actions[self.selected]=self.actions[self.selected].copy()
                                 time.sleep(0.1)
                                 fade_in(bgscroll, bgoffset, bgoffset)
                         elif self.actions[self.selected]=="QUIT":
                                 self.quit=True
+                        elif isinstance(self.actions[self.selected], list):
+                                if self.actions[self.selected][0]=="App":
+                                        TetrisApp(*self.actions[self.selected][1:]).run()
+                                else:
+                                        TetrisMenu(*self.actions[self.selected]).run()
                 elif key=='escape' or key=='x':
                         self.quit=True
-                elif key=='up':
-                        self.selected = (self.selected+1) % len(self.menu)
                 elif key=='down':
+                        self.selected = (self.selected+1) % len(self.menu)
+                elif key=='up':
                         self.selected-=1
                         if self.selected<0:
                                 self.selected=len(self.menu)-1
         
         def run(self):
                 global bgoffset
+                if len(self.menu)==0:
+                        raise IndexError
+                self.draw()
+                fade_in(display)
                 while not self.quit:
                         self.draw()
                         pygame.display.flip()
@@ -572,8 +600,6 @@ class TetrisMenu(object):
 
                         dont_burn_my_cpu.tick(config['maxfps'])
                 fade_out()
-
-                        
 
 if __name__ == '__main__':
         pygame.init()
@@ -592,8 +618,12 @@ if __name__ == '__main__':
         ], (0,0), bgscroll)
         bgoffset=0
         dont_burn_my_cpu = pygame.time.Clock()
-        for x in range(20):
-                TetrisMenu(["x"*x, "Quit"], ["1P", "QUIT"]).run()
-                if not config['debug']:
-                        break
+        menu = TetrisMenu([], [])
+        onepLevelSel = TetrisMenu([], [])
+        for x in range(9):
+                onepLevelSel.add("Level "+str(x), TetrisApp(config['cell_size']*2, 0, x))
+        onepLevelSel.add("Back", "QUIT")
+        menu.add("1 Player", onepLevelSel)
+        menu.add("Quit", "QUIT")
+        menu.run()
         pygame.quit()
