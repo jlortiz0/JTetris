@@ -455,9 +455,10 @@ class TetrisApp(TetrisClass):
                 fade_in(display)
                 pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
                 pygame.time.set_timer(pygame.USEREVENT+3, 100)
-                while 1:
+                while True:
                         if self.gameover:
                                 fade_out()
+                                pygame.time.set_timer(pygame.USEREVENT+1, 0)
                                 return
                         else:
                                 if not self.paused:
@@ -543,17 +544,8 @@ class TetrisMenu(TetrisClass):
 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
-                start=9-len(self.menu)/2
-                longest=0
-                for x in self.menu:
-                        if longest<len(x):
-                                longest=len(x)
-                length=9.5-(longest/4)
-                for x in range(len(self.menu)):
-                        draw_matrix([[13 for _ in range(longest//2+2)]], (length, start+x), display)
-                        if self.selected==x:
-                                draw_matrix([[17]], (length, start+x), display)
-                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.menu[x], False, (0,0,0)), ((length+1.5)*config['cell_size'], (start+x)*config['cell_size']))
+                display.blit(self.UI, (self.length, (9-len(self.menu)/2)*config['cell_size']))
+                draw_matrix([[17]], (self.length/config['cell_size'], self.selected+9-len(self.menu)/2) , display)
 
         def handle_key(self, key):
                 global bgoffset
@@ -587,6 +579,16 @@ class TetrisMenu(TetrisClass):
                 global bgoffset
                 if len(self.menu)==0:
                         raise IndexError
+                longest=0
+                for x in self.menu:
+                        if longest<len(x):
+                                longest=len(x)
+                self.length=9.5-(longest/4)
+                self.length*=config['cell_size']
+                self.UI=pygame.Surface(((longest//2+2)*config['cell_size'], len(self.menu)*config['cell_size']))
+                for x in range(len(self.menu)):
+                        draw_matrix([[13 for _ in range(longest//2+2)]], (0, x), self.UI)
+                        self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.menu[x], False, (0,0,0)), (1.5*config['cell_size'], x*config['cell_size']))
                 self.draw()
                 fade_in(display)
                 while not self.quit:
@@ -623,7 +625,7 @@ if __name__ == '__main__':
         dont_burn_my_cpu = pygame.time.Clock()
         menu = TetrisMenu([], [])
         onepLevelSel = TetrisMenu([], [])
-        for x in range(9):
+        for x in range(10):
                 onepLevelSel.add("Level "+str(x), ("App", config['cell_size']*2, 0, x))
         onepLevelSel.add("Back", "QUIT")
         menu.add("1 Player", onepLevelSel)
