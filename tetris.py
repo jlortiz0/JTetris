@@ -33,7 +33,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import pygame, os, time, random
+import pygame, os, time, random, sys
 
 # The configuration
 config = {
@@ -463,7 +463,7 @@ class TetrisApp(TetrisClass):
                 pygame.time.set_timer(pygame.USEREVENT+3, 100)
                 while True:
                         if self.quit:
-                        		fade_out()
+                                fade_out()
                                 pygame.time.set_timer(pygame.USEREVENT+1, 0)
                                 return
                         else:
@@ -492,6 +492,121 @@ class TetrisApp(TetrisClass):
                                         self.bgcolor=self.fade[2]
                                         self.fade=()
                         dont_burn_my_cpu.tick(config['maxfps'])
+
+class TetrisTimed(TetrisApp):
+        def __init__(self, off_x, off_y, level=0, time=0):
+                super().__init__(off_x, off_y, level)
+                self.count = (time>0)
+                self.timer = time
+
+        def draw(self):
+                display.blit(bgscroll, (bgoffset, bgoffset))
+                display.blit(self.UI, (config['cell_size']*10, 0))
+                draw_matrix(self.next_stone[0], (self.off_x+13, self.off_y+3), display)
+                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("{0}:{1:02}".format(self.timer//config['maxfps']//60, self.timer//config['maxfps'] % 60), False, (0,0,0)), (config['cell_size']*15.7, config['cell_size']*9.1))
+                draw_matrix([[14] for _ in range(18)], (self.off_x-1,0), display)
+                draw_matrix([[14] for _ in range(18)], (10+self.off_x,0), display)
+                self.screen.fill(self.bgcolor)
+                draw_matrix(self.board, (0,-1), self.screen)
+                draw_matrix(self.stone,(self.stone_x, self.stone_y-0.925), self.screen)
+
+        def run(self):
+                global bgoffset
+                key_actions = {
+                        'escape':       lambda:self.exit(True),
+                        'left':         lambda:self.move(-1),
+                        'right':        lambda:self.move(+1),
+                        'down':         lambda:self.drop(True),
+                        'z':            lambda:self.rotate_stone(-1),
+                        'x':            lambda:self.rotate_stone(+1),
+                        'return':       self.toggle_pause,
+                        'space':        self.exit,
+                        'y':            self.level_up
+                }
+
+                self.paused = False
+                self.fade=()
+                
+                self.UI=pygame.Surface((config['cell_size']*16, config['cell_size']*19))
+                self.UI.fill((128,128,128))
+                self.UI.set_colorkey((128,128,128))
+                draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (self.off_x+2, self.off_y+2), self.UI)
+                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+9), self.UI)
+                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Time:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+9.1)*config['cell_size']))
+                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+11), self.UI)
+                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Level:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+11.1)*config['cell_size']))
+                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+13), self.UI)
+                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Lines:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+13.1)*config['cell_size']))
+                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.level), False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*11.1))
+                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("0", False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*13.1))
+
+                self.draw()
+                fade_in(display)
+                pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
+                pygame.time.set_timer(pygame.USEREVENT+3, 100)
+                while True:
+                        if self.quit:
+                                fade_out()
+                                pygame.time.set_timer(pygame.USEREVENT+1, 0)
+                                return
+                        else:
+                                if not self.paused:
+                                        self.draw()
+                                        pygame.display.flip()
+                        
+                        for event in pygame.event.get():
+                                if event.type == pygame.USEREVENT+1:
+                                        self.drop()
+                                elif event.type == pygame.USEREVENT+2:
+                                        self.dropdelay=False
+                                        pygame.time.set_timer(pygame.USEREVENT+2, 0)
+                                elif event.type == pygame.USEREVENT+3:
+                                        bgoffset = (bgoffset-1) % -config['cell_size']
+                                elif event.type == pygame.QUIT:
+                                        self.quit=True
+                                elif event.type == pygame.KEYDOWN:
+                                        if pygame.key.name(event.key) in key_actions:
+                                                key_actions[pygame.key.name(event.key)]()
+                                        
+                        if self.count:
+                                self.timer-=1
+                                if self.timer==0:
+                                        play_sound("timeup.ogg")
+                                        self.bgcolor=bg_colors[2]
+                                        self.next_stone=[[]]
+                                        self.stone=self.next_stone
+                                        self.draw()
+                                        pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                                        for _ in range(30):
+                                                dont_burn_my_cpu.tick(config['maxfps'])
+                                        if config['music']:
+                                                pygame.mixer.music.stop()
+                                        play_sound("gameover.ogg")
+                                        for x in range(17, -1, -1):
+                                                draw_matrix([[1 for _ in range(10)]], (0, x), self.screen)
+                                                pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                                                time.sleep(0.02)
+                                        time.sleep(0.4)
+                                        self.screen.fill((0,0,0))
+                                        self.center_msg("Time Up!")
+                                        pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                                        time.sleep(2)
+                                        self.quit=True
+                                elif self.timer<301 and self.timer%30 == 0:
+                                        play_sound("countdown.ogg")
+                                        
+                        else:
+                                self.timer+=1
+                        if not self.quit and (self.timer%1800 == 0 or self.timer==900):
+                                play_sound("minute.ogg")
+                        if len(self.fade)>0:
+                                self.fade[0]=self.fade[0]+1
+                                self.bgcolor=[x + (((y-x)/config['maxfps']*2)*self.fade[0]) for x,y in zip(self.fade[1], self.fade[2])]
+                                if self.fade[0]==config['maxfps']/2:
+                                        self.bgcolor=self.fade[2]
+                                        self.fade=()
+                        dont_burn_my_cpu.tick(config['maxfps'])
+                
 
 sound_library={}
 def play_sound(path):
@@ -577,6 +692,8 @@ class TetrisMenu(TetrisClass):
                                 fade_out()
                                 if self.actions[self.selected][0]=="App":
                                         TetrisApp(*self.actions[self.selected][1:]).run()
+                                elif self.actions[self.selected][0]=="Timed":
+                                        TetrisTimed(*self.actions[self.selected][1:]).run()
                                 else:
                                         TetrisMenu(*self.actions[self.selected]).run()
                                 time.sleep(0.1)
@@ -618,7 +735,9 @@ class TetrisMenu(TetrisClass):
                                 if event.type == pygame.USEREVENT+3 and not config['debug']:
                                         bgoffset = (bgoffset-1) % -config['cell_size']
                                 elif event.type == pygame.QUIT:
-                                        self.quit=True
+                                        fade_out()
+                                        pygame.quit()
+                                        sys.exit()
                                 elif event.type == pygame.KEYDOWN:
                                         self.handle_key(pygame.key.name(event.key))
                                 elif event.type == pygame.USEREVENT+4:
@@ -646,11 +765,10 @@ if __name__ == '__main__':
         ], (0,0), bgscroll)
         bgoffset=0
         dont_burn_my_cpu = pygame.time.Clock()
-        menu = TetrisMenu([], [])
-        onepLevelSel = TetrisMenu([], [])
-        for x in range(10):
-                onepLevelSel.add("Level "+str(x), ("App", config['cell_size']*2, 0, x))
-        menu.add("1 Player", onepLevelSel)
+        MarathonLevel = TetrisMenu(["Level "+str(x) for x in range(10)], [("App", config['cell_size']*2, 0, x) for x in range(10)])
+        UltraLevel = TetrisMenu(["Level "+str(x) for x in range(10)], [("Timed", config['cell_size']*2, 0, x, 5400) for x in range(10)])
+        onePMode = TetrisMenu(["Marathon", "Timed"], [MarathonLevel, UltraLevel])
+        menu = TetrisMenu(["1 Player"], [onePMode])
         pygame.mixer.music.load("intro.ogg")
         pygame.mixer.music.play(0)
         pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
