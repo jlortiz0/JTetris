@@ -104,20 +104,23 @@ tetris_shapes = [
 ]
 
 speeds = [
-        800,
-        717,
-        633,
+        883,
+        817,
+        750,
+        683,
+        617,
         550,
         467,
-        383,
-        300,
-        216,
+        367,
+        283,
+        183,
+        167,
+        150,
         133,
-        100,
-        83, 83, 83,
-        67, 67, 67,
-        50, 50, 50,
-        33
+        117,
+        100, 100,
+        67, 67,
+        50
 ]
 
 class TetrisClass(object):
@@ -169,7 +172,6 @@ def join_matrixes(mat1, mat2, mat2_off):
 def new_board():
         board = [ [ 0 for x in range(10) ]
                         for y in range(19) ]
-        board += [[ 1 for x in range(10)]]
         return board
 
 def draw_matrix(matrix, offset, screen):
@@ -293,7 +295,7 @@ class TetrisApp(TetrisClass):
                                 play_sound("drop.ogg")
                                 rows=[]
                                 for i in range(len(self.board[:-1])):
-                                        if 0 not in self.board[i]:
+                                        if 0 not in self.board[i] and 14 not in self.board[i]:
                                                 rows.append(i)
                                 if len(rows)>0:
                                         self.lines+=len(rows)
@@ -460,7 +462,6 @@ class TetrisApp(TetrisClass):
                 self.draw()
                 fade_in(display)
                 pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
-                pygame.time.set_timer(pygame.USEREVENT+3, 100)
                 while True:
                         if self.quit:
                                 fade_out()
@@ -494,10 +495,39 @@ class TetrisApp(TetrisClass):
                         dont_burn_my_cpu.tick(config['maxfps'])
 
 class TetrisTimed(TetrisApp):
-        def __init__(self, off_x, off_y, level=0, time=0):
+        def __init__(self, off_x, off_y, level=0, time=0, lines=0, height=0):
                 super().__init__(off_x, off_y, level)
                 self.count = (time>0)
                 self.timer = time
+                self.linec = (lines>0)
+                self.linesClear=lines-1
+                if height>0:
+                        self.board=self.board[height:]+[[14 for _ in range(10)] for _ in range(height)]
+
+        def remove_rows(self, rows):
+                super().remove_rows(rows)
+                if self.linec and self.linesClear<self.lines:
+                        pygame.time.set_timer(pygame.USEREVENT+3, 0)
+                        play_sound("timeup.ogg")
+                        self.bgcolor=bg_colors[2]
+                        self.next_stone=[[[]], [[]]]
+                        self.draw()
+                        pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                        for _ in range(30):
+                                dont_burn_my_cpu.tick(config['maxfps'])
+                        if config['music']:
+                                pygame.mixer.music.stop()
+                        play_sound("gameover.ogg")
+                        for x in range(17, -1, -1):
+                                draw_matrix([[1 for _ in range(10)]], (0, x), self.screen)
+                                pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                                time.sleep(0.02)
+                        time.sleep(0.4)
+                        self.screen.fill((0,0,0))
+                        self.center_msg("Cleared!")
+                        pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                        time.sleep(2)
+                        self.quit=True
 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
@@ -543,7 +573,6 @@ class TetrisTimed(TetrisApp):
                 self.draw()
                 fade_in(display)
                 pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
-                pygame.time.set_timer(pygame.USEREVENT+3, 100)
                 while True:
                         if self.quit:
                                 fade_out()
@@ -571,6 +600,7 @@ class TetrisTimed(TetrisApp):
                         if self.count:
                                 self.timer-=1
                                 if self.timer==0:
+                                        pygame.time.set_timer(pygame.USEREVENT+3, 0)
                                         play_sound("timeup.ogg")
                                         self.bgcolor=bg_colors[2]
                                         self.next_stone=[[]]
@@ -597,7 +627,7 @@ class TetrisTimed(TetrisApp):
                                         
                         else:
                                 self.timer+=1
-                        if not self.quit and (self.timer%1800 == 0 or self.timer==900):
+                        if not self.quit and (self.timer%1800 == 0 or (self.count and self.timer==900)):
                                 play_sound("minute.ogg")
                         if len(self.fade)>0:
                                 self.fade[0]=self.fade[0]+1
@@ -615,8 +645,7 @@ def play_sound(path):
         global sound_library
         sound=sound_library.get(path)
         if sound is None:
-                path.replace('/', os.sep).replace('\\', os.sep)
-                sound=pygame.mixer.Sound(path)
+                sound=pygame.mixer.Sound("sound"+os.sep+path)
                 sound_library[path]=sound
         sound.play()
 
@@ -627,7 +656,7 @@ def play_song(song):
                 return
         _song=song
         pygame.mixer.music.stop()
-        pygame.mixer.music.load(song)
+        pygame.mixer.music.load("music"+os.sep+song)
         pygame.mixer.music.play(-1)
 
 def fade_out():
@@ -767,9 +796,10 @@ if __name__ == '__main__':
         dont_burn_my_cpu = pygame.time.Clock()
         MarathonLevel = TetrisMenu(["Level "+str(x) for x in range(10)], [("App", config['cell_size']*2, 0, x) for x in range(10)])
         UltraLevel = TetrisMenu(["Level "+str(x) for x in range(10)], [("Timed", config['cell_size']*2, 0, x, 5400) for x in range(10)])
-        onePMode = TetrisMenu(["Marathon", "Timed"], [MarathonLevel, UltraLevel])
+        LinesLevel = TetrisMenu(["Level "+str(x) for x in range(10)], [("Timed", config['cell_size']*2, 0, x, 0, 40) for x in range(10)])
+        onePMode = TetrisMenu(["Marathon", "Time Attack", "40 Lines"], [MarathonLevel, UltraLevel, LinesLevel])
         menu = TetrisMenu(["1 Player"], [onePMode])
-        pygame.mixer.music.load("intro.ogg")
+        pygame.mixer.music.load("music"+os.sep+"intro.ogg")
         pygame.mixer.music.play(0)
         pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
         menu.run()
