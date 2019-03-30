@@ -522,6 +522,10 @@ class TetrisTimed(TetrisApp):
                         time.sleep(2)
                         self.quit=True
 
+        def level_up(self):
+                super().level_up()
+                draw_matrix([[13, 13, 13, 13]], (self.off_x+4, self.off_y+11), self.UI)
+
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
                 if self.linec:
@@ -529,7 +533,10 @@ class TetrisTimed(TetrisApp):
                         self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(max(0, self.linesClear-self.lines)), False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*13.1))
                 display.blit(self.UI, (config['cell_size']*10, 0))
                 draw_matrix(self.next_stone[0], (self.off_x+13, self.off_y+3), display)
-                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("{0}:{1:02}".format(self.timer//config['maxfps']//60, self.timer//config['maxfps'] % 60), False, (0,0,0)), (config['cell_size']*15.7, config['cell_size']*9.1))
+                if self.score>9999999:
+                        self.score=9999999
+                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.score), False, (0,0,0)), (config['cell_size']*16.3, config['cell_size']*9.1))
+                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("{0}:{1:02}".format(self.timer//config['maxfps']//60, self.timer//config['maxfps'] % 60), False, (0,0,0)), (config['cell_size']*15.7, config['cell_size']*11.1))
                 draw_matrix([[14] for _ in range(18)], (self.off_x-1,0), display)
                 draw_matrix([[14] for _ in range(18)], (10+self.off_x,0), display)
                 self.screen.fill(self.bgcolor)
@@ -558,12 +565,11 @@ class TetrisTimed(TetrisApp):
                 self.UI.set_colorkey((128,128,128))
                 draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (self.off_x+2, self.off_y+2), self.UI)
                 draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+9), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Time:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+9.1)*config['cell_size']))
+                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Score:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+9.1)*config['cell_size']))
                 draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+11), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Level:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+11.1)*config['cell_size']))
+                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Time:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+11.1)*config['cell_size']))
                 draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+13), self.UI)
                 self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Lines:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+13.1)*config['cell_size']))
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.level), False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*11.1))
                 self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("0", False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*13.1))
 
                 self.draw()
@@ -773,9 +779,9 @@ class TetrisMenu(TetrisClass):
                 fade_out()
 
 class TLevelSelect(TetrisMenu):
-        def __init__(self, action, levels=9, heights=(0)):
+        def __init__(self, action, levels=9, heights=[0]):
                 self.quit=False
-                self.levels=levels
+                self.levels=levels+1
                 self.heights=heights
                 self.selLevel=0
                 self.selHeight=0
@@ -788,13 +794,22 @@ class TLevelSelect(TetrisMenu):
                         if "LVL" in temp:
                                 temp[temp.index("LVL")]=self.selLevel
                         if "HIGH" in temp:
-                                temp[temp.index("HIGH")]=self.selHeight
+                                temp[temp.index("HIGH")]=self.heights[self.selHeight]
                         play_sound("ok.ogg")
                         fade_out()
                         if temp[0]=="App":
-                                TetrisApp(*temp[1:]).run()
+                                game=TetrisApp(*temp[1:])
                         elif temp[0]=="Timed":
-                                TetrisTimed(*temp[1:]).run()
+                                game=TetrisTimed(*temp[1:])
+                        game.run()
+                        if isinstance(game, TetrisApp):
+                                pass
+                        elif game.linec:
+                                if game.lines>game.linesClear-1:
+                                        pass
+                        else:
+                                if game.timer<1:
+                                        pass
                         time.sleep(0.1)
                         fade_in(bgscroll, bgoffset, bgoffset)
                 elif key=='escape' or key=='x':
@@ -807,28 +822,30 @@ class TLevelSelect(TetrisMenu):
                         self.selLevel-=1
                         if self.selLevel<0:
                                 self.selLevel=self.levels-1
-                elif key=='up':
+                elif key=='up' and self.heights:
                         play_sound("select.ogg")
                         self.selHeight = (self.selHeight+1) % len(self.heights)
-                elif key=='down':
+                elif key=='down' and self.heights:
                         play_sound("select.ogg")
                         self.selHeight-=1
                         if self.selHeight<0:
-                                self.selHeight=self.levels-1
+                                self.selHeight=len(self.heights)-1
                 if _song!=None:
                         play_song("menu.ogg")
 
         def drawUI(self):
-                self.UI=pygame.Surface((6*config['cell_size'], 4*config['cell_size']))
-                draw_matrix([[13, 13, 13, 13, 13, 13] for _ in range(4)], (0, 0), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Level:", False, (0,0,0)), (0.5*config['cell_size'], 0.5*config['cell_size']))
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Height:", False, (0,0,0)), (0.5*config['cell_size'], 1.5*config['cell_size']))
+                self.UI=pygame.Surface((10*config['cell_size'], 6*config['cell_size']))
+                draw_matrix([[13 for _ in range(10)] for _ in range(6)], (0, 0), self.UI)
+                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Level:", False, (0,0,0)), (3*config['cell_size'], 0.5*config['cell_size']))
+                if len(self.heights)>1:
+                        self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Height:", False, (0,0,0)), (2.75*config['cell_size'], 1.5*config['cell_size']))
 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
-                display.blit(self.UI, (7*config['cell_size'], 6.75*config['cell_size']))
-                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.selLevel), False, (0,0,0)), (10.25*config['cell_size'], 7.3*config['cell_size']))
-                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.selHeight), False, (0,0,0)), (10.75*config['cell_size'], 8.3*config['cell_size']))
+                display.blit(self.UI, (5*config['cell_size'], 6*config['cell_size']))
+                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.selLevel), False, (0,0,0)), (10.75*config['cell_size'], 6.5*config['cell_size']))
+                if len(self.heights)>1:
+                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.selHeight), False, (0,0,0)), (11*config['cell_size'], 7.55*config['cell_size']))
 
 if __name__ == '__main__':
         pygame.init()
@@ -837,6 +854,7 @@ if __name__ == '__main__':
         pygame.key.set_repeat(200,25)
         pygame.event.set_blocked(pygame.MOUSEMOTION)
         _song=None
+        highscores=[[],[],[]]
         if config['debug']:
                 for x in range(1, len(tiles)):
                         display.blit(tiles[x], (0, (x-1)*config['cell_size']))
@@ -847,14 +865,14 @@ if __name__ == '__main__':
         ], (0,0), bgscroll)
         bgoffset=0
         dont_burn_my_cpu = pygame.time.Clock()
-        MarathonLevel = TetrisMenu(["Level "+str(x) for x in range(10)], [("App", config['cell_size']*2, 0, x) for x in range(10)])
-        UltraLevel = TetrisMenu(["Level "+str(x) for x in range(10)], [("Timed", config['cell_size']*2, 0, x, 5400) for x in range(10)])
-        #LinesLevel = TetrisMenu(["Level "+str(x) for x in range(10)], [("Timed", config['cell_size']*2, 0, x, 0, 40) for x in range(10)])
-        LinesLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 0, 40, "HIGH"), 9, [x for x in range(5)])
+        MarathonLevel = TLevelSelect(("App", config['cell_size']*2, 0, "LVL"))
+        UltraLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 5400))
+        LinesLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 0, 40, "HIGH"), 9, (0, 2, 4, 6, 8, 10))
         onePMode = TetrisMenu(["Marathon", "Time Attack", "40 Lines"], [MarathonLevel, UltraLevel, LinesLevel])
         menu = TetrisMenu(["1 Player"], [onePMode])
-        pygame.mixer.music.load("music"+os.sep+"intro.ogg")
-        pygame.mixer.music.play(0)
-        pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
+        if config['music']:
+                pygame.mixer.music.load("music"+os.sep+"intro.ogg")
+                pygame.mixer.music.play(0)
+                pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
         menu.run()
         pygame.quit()
