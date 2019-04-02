@@ -2,3 +2,4 @@ build/*
 tetris.spec
 dist/*
 __pycache__/*
+saves/*
