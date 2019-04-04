@@ -34,6 +34,7 @@
 # THE SOFTWARE.
 
 import pygame, os, time, random, sys, json
+from statistics import mean
 
 # The configuration
 config = {
@@ -792,7 +793,7 @@ class TLevelSelect(TetrisMenu):
                                 if not isinstance(game, TetrisTimed):
                                         score=game.score
                                         if saveFile!="Guest":
-                                                saveData[0][self.selLevel].append(score)
+                                                saveData[0].append(score)
                                         highscores[0][self.selLevel].append((saveFile, score))
                                         for x in range(len(highscores[0][self.selLevel])):
                                                 if score>highscores[0][self.selLevel][x][1]:
@@ -805,7 +806,7 @@ class TLevelSelect(TetrisMenu):
                                         if game.lines>game.linesClear-1:
                                                 score=game.timer
                                                 if saveFile!="Guest":
-                                                        saveData[2][self.selLevel][self.selHeight].append(score)
+                                                        saveData[2].append(score)
                                                 highscores[2][self.selLevel][self.selHeight].append((saveFile, score))
                                                 for x in range(len(highscores[2][self.selLevel][self.selHeight])):
                                                         if score<highscores[2][self.selLevel][self.selHeight][x][1]:
@@ -818,7 +819,7 @@ class TLevelSelect(TetrisMenu):
                                         if game.timer<1:
                                                 score=game.score
                                                 if saveFile!="Guest":
-                                                        saveData[1][self.selLevel].append(score)
+                                                        saveData[1].append(score)
                                                 highscores[1][self.selLevel].append((saveFile, score))
                                                 for x in range(len(highscores[1][self.selLevel])):
                                                         if score>highscores[1][self.selLevel][x][1]:
@@ -889,12 +890,9 @@ class TFileSelect(TetrisMenu):
                         if self.selected+2==len(self.menu):
                                 fade_out()
                                 name=TTextInput("Name Entry").run()
-                                if name:
-                                        with open("saves"+os.sep+name, 'a') as f:
-                                                x=[[[] for x in range(10)] for x in range(2)]
-                                                x.append([[[] for x in range (5)] for x in range(10)])
-                                                x+=(0, 0, 0, 0)
-                                                json.dump(x, f)
+                                if name and not (name=="Guest" or os.path.exists("saves"+os.sep+name)):
+                                        with open("saves"+os.sep+name, 'w') as f:
+                                                json.dump([[],[],[],0,0,0,0], f)
                                         self.menu.insert(-2, name)
                                         self.drawUI()
                                 fade_in(bgscroll, bgoffset, bgoffset)
@@ -1009,6 +1007,31 @@ class TMessage(TetrisMenu):
         def run(self):
                 super().run()
                 return self.yn
+
+class TPlayerCard(TMessage):
+        def __init__(self):
+                super().__init__("")
+
+        def run(self):
+                if saveFile=="Guest":
+                        TMessage("Guests cannot\nuse scorecard.").run()
+                        return
+                with open("saves"+os.sep+saveFile) as f:
+                        saveData = json.load(f)
+                totalLines = sum(saveData[3:])
+                if not saveData[0]:
+                        saveData[0]=[0]
+                if not saveData[1]:
+                        saveData[1]=[0]
+                if not saveData[2]:
+                        saveData[2]=[0]
+                power = mean(saveData[0])+mean(saveData[1])+mean(saveData[2])
+                self.msg=("Player "+saveFile+"\nPower: "+str(round(power/100))+"\nLines: "+str(totalLines)
+                +"\nSingle: "+str(round(saveData[3]/totalLines*100, 2))
+                +"%\nDouble: "+str(round(saveData[4]/totalLines*100, 2))
+                +"%\nTriple: "+str(round(saveData[5]/totalLines*100, 2))
+                +"%\nTetris: "+str(round(saveData[6]/totalLines*100, 2))+"%")
+                super().run()
                         
 pygame.init()
 if config['music']:
@@ -1066,7 +1089,7 @@ MarathonLevel = TLevelSelect(("App", config['cell_size']*2, 0, "LVL"), title="Ma
 UltraLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 5400), title="Time Attack")
 LinesLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 0, 40, "HIGH"), 9, (0, 2, 4, 6, 8, 10), "40 Lines")
 onePMode = TetrisMenu(["Marathon", "Time Attack", "40 Lines"], [MarathonLevel, UltraLevel, LinesLevel])
-menu = TetrisMenu(["1 Player", "Message Test"], [onePMode, TMessage("Hello!\nThis is a\nmessage test.\nHow are you today?")], saveFile)
+menu = TetrisMenu(["1 Player", "Scorecard"], [onePMode, TPlayerCard()], saveFile)
 if config['music']:
         pygame.mixer.music.load("music"+os.sep+"menu_intro.ogg")
         time.sleep(0.25)
