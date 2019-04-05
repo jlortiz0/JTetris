@@ -3,3 +3,4 @@ tetris.spec
 dist/*
 __pycache__/*
 saves/*
+screenshot/*

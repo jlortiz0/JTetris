@@ -35,6 +35,7 @@
 
 import pygame, os, time, random, sys, json
 from statistics import mean
+from datetime import datetime
 
 # The configuration
 config = {
@@ -43,8 +44,7 @@ config = {
         'songs':        ("dxa1.ogg", "dxa2.ogg", "dxa3.ogg", "danger.ogg"),
         'heights':      (19, 9, 6, 3),
         'music':        True,
-        'sound':        True,
-        'debug':        False
+        'sound':        True
 }
 
 bg_colors = [
@@ -102,10 +102,10 @@ speeds = [
 
 class TetrisClass(object):
         def draw(self):
-                raise NotImplemented
+                raise NotImplementedError
 
         def run(self):
-                raise NotImplemented
+                raise NotImplementedError
 
 def rotate_clockwise(shape, rot_center):
         if shape==tetris_shapes[6]:
@@ -144,9 +144,7 @@ def join_matrixes(mat1, mat2, mat2_off):
         return mat1
 
 def new_board():
-        board = [ [ 0 for x in range(10) ]
-                        for y in range(19) ]
-        return board
+        return [[0 for _ in range(10)] for _ in range(19)]
 
 def draw_matrix(matrix, offset, screen):
                 off_x, off_y  = offset
@@ -168,10 +166,7 @@ class TetrisApp(TetrisClass):
                 self.off_y=off_y//config['cell_size']
                 play_song("dxa1.ogg")
                 self.board = new_board()
-                if config['debug']:
-                        self.next_stone=[tetris_shapes[0]]
-                else:
-                        self.next_stone=[random.choice(tetris_shapes), random.choice(tetris_shapes)]
+                self.next_stone=[random.choice(tetris_shapes), random.choice(tetris_shapes)]
                 self.new_stone()
                 self.lines=0
                 self.level=level
@@ -181,12 +176,9 @@ class TetrisApp(TetrisClass):
         
         def new_stone(self):
                 self.stone=self.next_stone.pop(0)
-                if config['debug']:
-                        self.next_stone=[tetris_shapes[(tetris_shapes.index(self.stone)+1) % len(tetris_shapes)]]
-                else:
-                        self.next_stone.append(random.choice(tetris_shapes))
-                        while self.next_stone[0]==self.next_stone[1]==self.stone:
-                                self.next_stone[1]=random.choice(tetris_shapes)
+                self.next_stone.append(random.choice(tetris_shapes))
+                while self.next_stone[0]==self.next_stone[1]==self.stone:
+                        self.next_stone[1]=random.choice(tetris_shapes)
                 self.stone_x = int(10 / 2 - len(self.stone[0])/2)
                 self.stone_y = 1
                 self.rot_center=[0,1,1,1]
@@ -573,7 +565,11 @@ class TetrisTimed(TetrisApp):
                                 elif event.type == pygame.QUIT:
                                         self.quit=True
                                 elif event.type == pygame.KEYDOWN:
-                                        if pygame.key.name(event.key) in key_actions:
+                                        if event.key==pygame.K_F12:
+                                                now = datetime.now()
+                                                pygame.image.save(display, "screenshot"+os.sep+"{}-{}-{}_{}-{}-{}.png".format(now.year, now.month, now.day, now.hour, now.minute, now.second))
+                                                play_sound("screenshot.ogg")
+                                        elif pygame.key.name(event.key) in key_actions:
                                                 key_actions[pygame.key.name(event.key)]()
                                         
                         if self.count and not self.paused:
@@ -738,14 +734,19 @@ class TetrisMenu(TetrisClass):
                         pygame.display.flip()
 
                         for event in pygame.event.get():
-                                if event.type == pygame.USEREVENT+3 and not config['debug']:
+                                if event.type == pygame.USEREVENT+3:
                                         bgoffset = (bgoffset-1) % -config['cell_size']
                                 elif event.type == pygame.QUIT:
                                         fade_out()
                                         pygame.quit()
                                         sys.exit()
                                 elif event.type == pygame.KEYDOWN:
-                                        self.handle_key(pygame.key.name(event.key))
+                                        if event.key==pygame.K_F12:
+                                                now = datetime.now()
+                                                pygame.image.save(display, "screenshot"+os.sep+"{}-{}-{}_{}-{}-{}.png".format(now.year, now.month, now.day, now.hour, now.minute, now.second))
+                                                play_sound("screenshot.ogg")
+                                        else:
+                                                self.handle_key(pygame.key.name(event.key))
                                 elif event.type == pygame.USEREVENT+4:
                                         play_song("menu.ogg")
                                         pygame.mixer.music.set_endevent()
@@ -953,7 +954,7 @@ class TTextInput(TetrisMenu):
                         pygame.display.flip()
 
                         for event in pygame.event.get():
-                                if event.type == pygame.USEREVENT+3 and not config['debug']:
+                                if event.type == pygame.USEREVENT+3:
                                         bgoffset = (bgoffset-1) % -config['cell_size']
                                 elif event.type == pygame.QUIT:
                                         fade_out()
@@ -1019,6 +1020,9 @@ class TPlayerCard(TMessage):
                 with open("saves"+os.sep+saveFile) as f:
                         saveData = json.load(f)
                 totalLines = sum(saveData[3:])
+                if totalLines==0:
+                        TMessage("Not enough data!\nYour stats will\nappear here after\nyou play for a bit.").run()
+                        return
                 if not saveData[0]:
                         saveData[0]=[0]
                 if not saveData[1]:
@@ -1026,11 +1030,12 @@ class TPlayerCard(TMessage):
                 if not saveData[2]:
                         saveData[2]=[0]
                 power = mean(saveData[0])+mean(saveData[1])+mean(saveData[2])
-                self.msg=("Player "+saveFile+"\nPower: "+str(round(power/100))+"\nLines: "+str(totalLines)
-                +"\nSingle: "+str(round(saveData[3]/totalLines*100, 2))
-                +"%\nDouble: "+str(round(saveData[4]/totalLines*100, 2))
-                +"%\nTriple: "+str(round(saveData[5]/totalLines*100, 2))
-                +"%\nTetris: "+str(round(saveData[6]/totalLines*100, 2))+"%")
+                self.msg=("Player "+saveFile+"\nPower: "+str(round(power/100))
+                          +"\nLines: "+str(sum((saveData[3], saveData[4]*2, saveData[5]*3, saveData[6]*4)))
+                          +"\nSingle: "+str(round(saveData[3]/totalLines*100, 2))
+                          +"%\nDouble: "+str(round(saveData[4]/totalLines*100, 2))
+                          +"%\nTriple: "+str(round(saveData[5]/totalLines*100, 2))
+                          +"%\nTetris: "+str(round(saveData[6]/totalLines*100, 2))+"%")
                 super().run()
                         
 pygame.init()
@@ -1064,10 +1069,12 @@ highscores=[]
 saveFile=None
 if not os.path.exists("saves"):
         os.mkdir("saves")
+if not os.path.exists("screenshot"):
+        os.mkdir("screenshot")
 if not os.path.exists("saves"+os.sep+"highscore"):
         with open("saves"+os.sep+"highscore", 'w') as f:
                 x=[[[] for x in range(10)] for x in range(2)]
-                x.append([[[] for x in range (5)] for x in range(10)])
+                x.append([[[] for x in range (6)] for x in range(10)])
                 json.dump(x, f)
 with open("saves"+os.sep+"highscore") as f:
         highscores=json.load(f)
@@ -1075,11 +1082,6 @@ def save_highscores():
         with open("saves"+os.sep+"highscore", 'w') as f:
                 json.dump(highscores, f)
 
-if config['debug']:
-        for x in range(1, len(tiles)):
-                display.blit(tiles[x], (0, (x-1)*config['cell_size']))
-        pygame.display.update(pygame.Rect(0, 0, config['cell_size'], len(tiles)*config['cell_size']))
-        time.sleep(3)
 bgscroll=pygame.Surface((config['cell_size']*21, config['cell_size']*19))
 draw_matrix([ [ 15+((x+y)%2) for x in range(21) ] for y in range(18+config['cell_size'])
 ], (0,0), bgscroll)
