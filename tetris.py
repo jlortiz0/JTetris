@@ -1,18 +1,6 @@
 #!/usr/bin/env python
 #-*- coding: utf-8 -*-
 
-# Very simple tetris implementation
-# 
-# Control keys:
-# Down - Drop stone faster
-# Left/Right - Move stone
-# Z - Rotate Stone clockwise
-# X - Rotate Stone counterclockwise
-# Escape - Quit game
-# Enter - Pause game
-#
-# Have fun!
-
 # Copyright (c) 2010 "Kevin Chabowski"<kevin@kch42.de>
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -33,7 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import pygame, os, time, random, sys, json
+import pygame, os, time, random, sys, json, types
 from statistics import mean
 from datetime import datetime
 
@@ -425,7 +413,7 @@ class TetrisApp(TetrisClass):
                 self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("0", False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*13.1))
 
                 self.draw()
-                fade_in(display)
+                fade_in()
                 pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
                 while True:
                         if self.quit:
@@ -543,7 +531,7 @@ class TetrisTimed(TetrisApp):
                 self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("0", False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*13.1))
 
                 self.draw()
-                fade_in(display)
+                fade_in()
                 pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
                 while True:
                         if self.quit:
@@ -647,13 +635,13 @@ def fade_out():
                 pygame.display.flip()
                 dont_burn_my_cpu.tick(config['maxfps'])
 
-def fade_in(surf, off_x=0, off_y=0):
-        fadebg = surf.copy()
+def fade_in():
+        fadebg = display.copy()
         fadeeffect = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
         fadeeffect.fill((255,255,255))
         for x in range(265, 0, -24):
                 fadeeffect.set_alpha(min(x, 255))
-                display.blit(fadebg, (off_x,off_y))
+                display.blit(fadebg, (0,0))
                 display.blit(fadeeffect, (0,0))
                 pygame.display.flip()
                 dont_burn_my_cpu.tick(config['maxfps'])
@@ -682,25 +670,22 @@ class TetrisMenu(TetrisClass):
         def handle_key(self, key):
                 global bgoffset
                 if key=='return' or key=='z':
-                        if isinstance(self.actions[self.selected], TetrisMenu):
+                        if isinstance(self.actions[self.selected], TetrisClass):
                                 play_sound("ok.ogg")
                                 fade_out()
                                 self.actions[self.selected].run()
                                 time.sleep(0.1)
-                                fade_in(bgscroll, bgoffset, bgoffset)
-                        elif self.actions[self.selected]=="QUIT":
-                                self.quit=True
-                        elif isinstance(self.actions[self.selected], list) or isinstance(self.actions[self.selected], tuple):
+                                self.draw()
+                                fade_in()
+                        elif self.actions[self.selected]==None:
+                                play_sound("cancel.ogg")
+                        elif isinstance(self.actions[self.selected], types.FunctionType) or isinstance(self.actions[self.selected], tuple):
                                 play_sound("ok.ogg")
                                 fade_out()
-                                if self.actions[self.selected][0]=="App":
-                                        TetrisApp(*self.actions[self.selected][1:]).run()
-                                elif self.actions[self.selected][0]=="Timed":
-                                        TetrisTimed(*self.actions[self.selected][1:]).run()
-                                else:
-                                        TetrisMenu(*self.actions[self.selected]).run()
+                                self.actions[self.selected]()
                                 time.sleep(0.1)
-                                fade_in(bgscroll, bgoffset, bgoffset)
+                                self.draw()
+                                fade_in()
                 elif key=='escape' or key=='x':
                         self.quit=True
                 elif key=='down':
@@ -728,7 +713,7 @@ class TetrisMenu(TetrisClass):
                 global bgoffset
                 self.drawUI()
                 self.draw()
-                fade_in(display)
+                fade_in()
                 while not self.quit:
                         self.draw()
                         pygame.display.flip()
@@ -835,7 +820,8 @@ class TLevelSelect(TetrisMenu):
                                 save_highscores()
                         time.sleep(0.1)
                         play_song("menu.ogg")
-                        fade_in(bgscroll, bgoffset, bgoffset)
+                        self.draw()
+                        fade_in()
                 elif key=='escape' or key=='x':
                         self.quit=True
                 elif key=='right':
@@ -878,6 +864,9 @@ class TLevelSelect(TetrisMenu):
                 display.blit(self.UI, (5*config['cell_size'], 6*config['cell_size']))
                 display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.title, False, (0,0,0), (255,255,255)), ((10-len(self.title)/4)*config['cell_size'], 4*config['cell_size']))
 
+class FileDeletedException(Exception):
+        pass
+
 class TFileSelect(TetrisMenu):
         def __init__(self, files, action):
                 if "highscore" in files:
@@ -896,14 +885,21 @@ class TFileSelect(TetrisMenu):
                                                 json.dump([[],[],[],0,0,0,0], f)
                                         self.menu.insert(-2, name)
                                         self.drawUI()
-                                fade_in(bgscroll, bgoffset, bgoffset)
+                                self.draw()
+                                fade_in()
                         else:
                                 global saveFile
                                 saveFile = self.menu[self.selected]
                                 fade_out()
                                 self.actions.title=saveFile
-                                self.actions.run()
-                                fade_in(bgscroll, bgoffset, bgoffset)
+                                try:
+                                        self.actions.run()
+                                except FileDeletedException:
+                                        self.menu.pop(self.selected)
+                                        self.selected-=1
+                                        self.drawUI()
+                                self.draw()
+                                fade_in()
                 elif key=='escape' or key=='x':
                         self.quit=True
                 elif key=='down':
@@ -948,7 +944,7 @@ class TTextInput(TetrisMenu):
                 global bgoffset
                 self.drawUI()
                 self.draw()
-                fade_in(display)
+                fade_in()
                 while not self.quit:
                         self.draw()
                         pygame.display.flip()
@@ -1015,7 +1011,7 @@ class TPlayerCard(TMessage):
 
         def run(self):
                 if saveFile=="Guest":
-                        TMessage("Guests cannot\nuse scorecard.").run()
+                        TMessage("Guests cannot\nuse scorecard").run()
                         return
                 with open("saves"+os.sep+saveFile) as f:
                         saveData = json.load(f)
@@ -1036,6 +1032,43 @@ class TPlayerCard(TMessage):
                           +"%\nDouble: "+str(round(saveData[4]/totalLines*100, 2))
                           +"%\nTriple: "+str(round(saveData[5]/totalLines*100, 2))
                           +"%\nTetris: "+str(round(saveData[6]/totalLines*100, 2))+"%")
+                super().run()
+
+class TOptionsMenu(TetrisMenu):
+        def __init__(self):
+                def toggle_cfg(option):
+                        config[option]=not config[option]
+                        if option=="music":
+                                if config[option]:
+                                        pygame.mixer.init()
+                                        play_song("menu.ogg")
+                                else:
+                                        pygame.mixer.music.fadeout(1000)
+                        
+                def erase_highscores():
+                        global highscores
+                        if not TMessage("Ok to delete\nhighscore data?\nZ-Yes X-No").run():
+                                return
+                        os.remove("saves"+os.sep+"highscore")
+                        highscores=[[[] for x in range(10)] for x in range(2)]
+                        highscores.append([[[] for x in range (6)] for x in range(10)])
+                        save_highscores()
+                        TMessage("Highscores cleared").run()
+                        
+                def erase_my_file():
+                        global saveFile
+                        if not TMessage("Ok to delete\nfile "+saveFile+"?\nZ-Yes X-No").run():
+                                return
+                        os.remove("saves"+os.sep+saveFile)
+                        saveFile="Guest"
+                        TMessage("Save deleted\nReturning to\nfile select...").run()
+                        raise FileDeletedException()
+                super().__init__(["Toggle Music", "Toggle Sound", "Erase Highscores", "Erase My File"], [lambda:toggle_cfg("music"), lambda:toggle_cfg("sound"), erase_highscores, erase_my_file], "Options")
+
+        def run(self):
+                if saveFile=="Guest":
+                        TMessage("Guests cannot\nchange settings").run()
+                        return
                 super().run()
                         
 pygame.init()
@@ -1091,7 +1124,7 @@ MarathonLevel = TLevelSelect(("App", config['cell_size']*2, 0, "LVL"), title="Ma
 UltraLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 5400), title="Time Attack")
 LinesLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 0, 40, "HIGH"), 9, (0, 2, 4, 6, 8, 10), "40 Lines")
 onePMode = TetrisMenu(["Marathon", "Time Attack", "40 Lines"], [MarathonLevel, UltraLevel, LinesLevel])
-menu = TetrisMenu(["1 Player", "Scorecard"], [onePMode, TPlayerCard()], saveFile)
+menu = TetrisMenu(["1 Player", "Options", "Scorecard"], [onePMode, TOptionsMenu(), TPlayerCard()], saveFile)
 if config['music']:
         pygame.mixer.music.load("music"+os.sep+"menu_intro.ogg")
         time.sleep(0.25)
