@@ -785,9 +785,9 @@ class TLevelSelect(TetrisMenu):
                                                 if score>highscores[0][self.selLevel][x][1]:
                                                         highscores[0][self.selLevel].insert(x, (saveFile, score))
                                                         highscores[0][self.selLevel].pop()
-                                                        while len(highscores[0][self.selLevel])>3:
-                                                                highscores[0][self.selLevel].pop()
                                                         break
+                                        while len(highscores[0][self.selLevel])>3:
+                                                highscores[0][self.selLevel].pop()
                                 elif game.linec:
                                         if game.lines>game.linesClear-1:
                                                 score=game.timer
@@ -798,9 +798,9 @@ class TLevelSelect(TetrisMenu):
                                                         if score<highscores[2][self.selLevel][self.selHeight][x][1]:
                                                                 highscores[2][self.selLevel][self.selHeight].insert(x, (saveFile, score))
                                                                 highscores[2][self.selLevel][self.selHeight].pop()
-                                                                while len(highscores[2][self.selLevel][self.selHeight])>3:
-                                                                        highscores[2][self.selLevel][self.selHeight].pop()
                                                                 break
+                                                while len(highscores[2][self.selLevel][self.selHeight])>3:
+                                                       highscores[2][self.selLevel][self.selHeight].pop()
                                 else:
                                         if game.timer<1:
                                                 score=game.score
@@ -811,9 +811,9 @@ class TLevelSelect(TetrisMenu):
                                                         if score>highscores[1][self.selLevel][x][1]:
                                                                 highscores[1][self.selLevel].insert(x, (saveFile, score))
                                                                 highscores[1][self.selLevel].pop()
-                                                                while len(highscores[1][self.selLevel])>3:
-                                                                        highscores[1][self.selLevel].pop()
                                                                 break
+                                                while len(highscores[1][self.selLevel])>3:
+                                                       highscores[1][self.selLevel].pop()
                                 if saveFile!="Guest":
                                         with open("saves"+os.sep+saveFile, 'w') as f:
                                                 json.dump(saveData, f)
