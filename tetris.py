@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #-*- coding: utf-8 -*-
 
 # Copyright (c) 2010 "Kevin Chabowski"<kevin@kch42.de>
@@ -21,7 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import pygame, os, time, random, sys, json, types, socket
+import pygame, os, time, random, sys, json, types, socket, select
 from statistics import mean
 from datetime import datetime
 
@@ -662,11 +662,11 @@ class ClientSocket(object):
                 self.sock.shutdown(1)
                 self.sock.close()
 
+        def readable(self):
+                return bool(self.sock.recv(1, socket.MSG_PEEK))
+
         def send(self, data):
-                if type(data)==str:
-                        data = data.encode()
-                elif type(data)!=bytes:
-                        data = json.dumps(data).encode()
+                data = json.dumps(data).encode()
                 if len(data)>65535:
                         raise ValueError
                 size=int.to_bytes(len(data), 2, 'big')
@@ -702,7 +702,7 @@ class ClientSocket(object):
                                 raise BrokenPipeError
                         totalrecd+=len(chunk)
                         chunks+=chunk
-                return chunks
+                return json.loads(chunks)
                 
 class TetrisMenu(TetrisClass):
         def __init__(self, menu, actions, title=None):
