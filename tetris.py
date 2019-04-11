@@ -21,7 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import pygame, os, time, random, sys, json, types
+import pygame, os, time, random, sys, json, types, socket
 from statistics import mean
 from datetime import datetime
 
@@ -88,13 +88,6 @@ speeds = [
         50
 ]
 
-class TetrisClass(object):
-        def draw(self):
-                raise NotImplementedError
-
-        def run(self):
-                raise NotImplementedError
-
 def rotate_clockwise(shape, rot_center):
         if shape==tetris_shapes[6]:
                 return (shape, rot_center)
@@ -141,6 +134,60 @@ def draw_matrix(matrix, offset, screen):
                                 if val:
                                         screen.blit(tiles[val],((off_x+x) * config['cell_size'],
                                                         (off_y+y) * config['cell_size']))
+
+sound_library={}
+def play_sound(path):
+        if not config['sound']:
+                return
+        global sound_library
+        sound=sound_library.get(path)
+        if sound is None:
+                sound=pygame.mixer.Sound("sound"+os.sep+path)
+                sound_library[path]=sound
+        sound.play()
+
+_song=None
+def play_song(song):
+        global _song
+        if not config['music'] or _song==song:
+                return
+        _song=song
+        pygame.mixer.music.stop()
+        pygame.mixer.music.load("music"+os.sep+song)
+        pygame.mixer.music.play(-1)
+
+def fade_out():
+        pygame.time.set_timer(pygame.USEREVENT+3, 0)
+        fadebg = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
+        fadebg.blit(display, (0,0))
+        fadeeffect = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
+        fadeeffect.fill((255,255,255))
+        for x in range(0, 257, 32):
+                fadeeffect.set_alpha(min(x, 255))
+                display.blit(fadebg, (0,0))
+                display.blit(fadeeffect, (0,0))
+                pygame.display.flip()
+                dont_burn_my_cpu.tick(config['maxfps'])
+
+def fade_in():
+        fadebg = display.copy()
+        fadeeffect = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
+        fadeeffect.fill((255,255,255))
+        for x in range(265, 0, -24):
+                fadeeffect.set_alpha(min(x, 255))
+                display.blit(fadebg, (0,0))
+                display.blit(fadeeffect, (0,0))
+                pygame.display.flip()
+                dont_burn_my_cpu.tick(config['maxfps'])
+        pygame.time.set_timer(pygame.USEREVENT+3, 100)
+        pygame.event.clear(pygame.KEYDOWN)
+
+class TetrisClass(object):
+        def draw(self):
+                raise NotImplementedError
+
+        def run(self):
+                raise NotImplementedError
 
 class TetrisApp(TetrisClass):
         def __init__(self, off_x, off_y, level=0):
@@ -599,55 +646,64 @@ class TetrisTimed(TetrisApp):
                                         self.bgcolor=self.fade[2]
                                         self.fade=()
                         dont_burn_my_cpu.tick(config['maxfps'])
+
+class ClientSocket(object):
+        def __init__(self, sock=None):
+                if sock:
+                        self.sock = sock
+                else:
+                        self.sock = socket.socket()
+
+        def connect(self, host, port):
+                self.sock.connect((host, port))
+
+        def close(self):
+                self.send("quit")
+                self.sock.shutdown(1)
+                self.sock.close()
+
+        def send(self, data):
+                if type(data)==str:
+                        data = data.encode()
+                elif type(data)!=bytes:
+                        data = json.dumps(data).encode()
+                if len(data)>65535:
+                        raise ValueError
+                size=int.to_bytes(len(data), 2, 'big')
+                totalsent = 0
+                while totalsent<2:
+                        sent=self.sock.send(size[totalsent:])
+                        if sent==0:
+                                raise BrokenPipeError
+                        totalsent+=sent
+                totalsent = 0
+                size=len(data)
+                while totalsent<size:
+                        sent=self.sock.send(data[totalsent:])
+                        if not sent:
+                                raise BrokenPipeError
+                        totalsent+=sent
+
+        def receive(self):
+                chunks=bytes()
+                totalrecd=0
+                while totalrecd<2:
+                        chunk=self.sock.recv(2)
+                        if not chunk:
+                                raise BrokenPipeError
+                        totalrecd+=len(chunk)
+                        chunks+=chunk
+                size=int.from_bytes(chunks[:2], 'big')
+                chunks=chunks[2:]
+                totalrecd-=2
+                while totalrecd<size:
+                        chunk=self.sock.recv(2048)
+                        if not chunk:
+                                raise BrokenPipeError
+                        totalrecd+=len(chunk)
+                        chunks+=chunk
+                return chunks
                 
-
-sound_library={}
-def play_sound(path):
-        if not config['sound']:
-                return
-        global sound_library
-        sound=sound_library.get(path)
-        if sound is None:
-                sound=pygame.mixer.Sound("sound"+os.sep+path)
-                sound_library[path]=sound
-        sound.play()
-
-_song=None
-def play_song(song):
-        global _song
-        if not config['music'] or _song==song:
-                return
-        _song=song
-        pygame.mixer.music.stop()
-        pygame.mixer.music.load("music"+os.sep+song)
-        pygame.mixer.music.play(-1)
-
-def fade_out():
-        pygame.time.set_timer(pygame.USEREVENT+3, 0)
-        fadebg = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
-        fadebg.blit(display, (0,0))
-        fadeeffect = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
-        fadeeffect.fill((255,255,255))
-        for x in range(0, 257, 32):
-                fadeeffect.set_alpha(min(x, 255))
-                display.blit(fadebg, (0,0))
-                display.blit(fadeeffect, (0,0))
-                pygame.display.flip()
-                dont_burn_my_cpu.tick(config['maxfps'])
-
-def fade_in():
-        fadebg = display.copy()
-        fadeeffect = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
-        fadeeffect.fill((255,255,255))
-        for x in range(265, 0, -24):
-                fadeeffect.set_alpha(min(x, 255))
-                display.blit(fadebg, (0,0))
-                display.blit(fadeeffect, (0,0))
-                pygame.display.flip()
-                dont_burn_my_cpu.tick(config['maxfps'])
-        pygame.time.set_timer(pygame.USEREVENT+3, 100)
-        pygame.event.clear(pygame.KEYDOWN)
-
 class TetrisMenu(TetrisClass):
         def __init__(self, menu, actions, title=None):
                 self.menu=menu
@@ -820,6 +876,7 @@ class TLevelSelect(TetrisMenu):
                                 save_highscores()
                         time.sleep(0.1)
                         play_song("menu.ogg")
+                        self.drawUI()
                         self.draw()
                         fade_in()
                 elif key=='escape' or key=='x':
@@ -1070,65 +1127,65 @@ class TOptionsMenu(TetrisMenu):
                         TMessage("Guests cannot\nchange settings").run()
                         return
                 super().run()
-                        
-pygame.init()
-if config['music']:
-        pygame.mixer.init()
-display = pygame.display.set_mode((config['cell_size']*(20), config['cell_size']*18))
-pygame.display.set_caption("Tetris DX")
-tiles = [None]
 
-tileset = pygame.image.load("tileset.png").convert()
-for y in range(tileset.get_height()//8):
-        for x in range(tileset.get_width()//8):
-                tiles.append(pygame.transform.scale(tileset.subsurface((8*x, 8*y, 8, 8)), (config['cell_size'],config['cell_size'])))
-del tileset
-for x in range(7, 10):
-        tiles.insert(x+3, pygame.transform.rotate(tiles[x], 90))
-tiles.insert(13, pygame.Surface((config['cell_size'],config['cell_size'])))
-tiles[13].fill((255,255,255))
-#Uncomment this when new tiles are added
-#tiles.insert(15, pygame.Surface((config['cell_size'],config['cell_size'])))
-#tiles[15].fill((17, 83, 18))
-#tiles.insert(16, pygame.Surface((config['cell_size'],config['cell_size'])))
-#tiles[16].fill((135, 168, 123))
-tiles.insert(17, pygame.Surface((config['cell_size'],config['cell_size'])))
-tiles[17].fill((193, 221, 243))
+if __name__=="__main__":                        
+        pygame.init()
+        if config['music']:
+                pygame.mixer.init()
+        display = pygame.display.set_mode((config['cell_size']*(20), config['cell_size']*18))
+        pygame.display.set_caption("Tetris DX")
+        tiles = [None]
 
-pygame.key.set_repeat(200,25)
-pygame.event.set_blocked(pygame.MOUSEMOTION)
-_song=None
-highscores=[]
-saveFile=None
-if not os.path.exists("saves"):
-        os.mkdir("saves")
-if not os.path.exists("screenshot"):
-        os.mkdir("screenshot")
-if not os.path.exists("saves"+os.sep+"highscore"):
-        with open("saves"+os.sep+"highscore", 'w') as f:
-                x=[[[] for x in range(10)] for x in range(2)]
-                x.append([[[] for x in range (6)] for x in range(10)])
-                json.dump(x, f)
-with open("saves"+os.sep+"highscore") as f:
-        highscores=json.load(f)
-def save_highscores():
-        with open("saves"+os.sep+"highscore", 'w') as f:
-                json.dump(highscores, f)
+        tileset = pygame.image.load("tileset.png").convert()
+        for y in range(tileset.get_height()//8):
+                for x in range(tileset.get_width()//8):
+                        tiles.append(pygame.transform.scale(tileset.subsurface((8*x, 8*y, 8, 8)), (config['cell_size'],config['cell_size'])))
+        del tileset
+        for x in range(7, 10):
+                tiles.insert(x+3, pygame.transform.rotate(tiles[x], 90))
+        tiles.insert(13, pygame.Surface((config['cell_size'],config['cell_size'])))
+        tiles[13].fill((255,255,255))
+        #Uncomment this when new tiles are added
+        #tiles.insert(15, pygame.Surface((config['cell_size'],config['cell_size'])))
+        #tiles[15].fill((17, 83, 18))
+        #tiles.insert(16, pygame.Surface((config['cell_size'],config['cell_size'])))
+        #tiles[16].fill((135, 168, 123))
+        tiles.insert(17, pygame.Surface((config['cell_size'],config['cell_size'])))
+        tiles[17].fill((193, 221, 243))
 
-bgscroll=pygame.Surface((config['cell_size']*21, config['cell_size']*19))
-draw_matrix([ [ 15+((x+y)%2) for x in range(21) ] for y in range(18+config['cell_size'])
-], (0,0), bgscroll)
-bgoffset=0
-dont_burn_my_cpu = pygame.time.Clock()
-MarathonLevel = TLevelSelect(("App", config['cell_size']*2, 0, "LVL"), title="Marathon")
-UltraLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 5400), title="Time Attack")
-LinesLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 0, 40, "HIGH"), 9, (0, 2, 4, 6, 8, 10), "40 Lines")
-onePMode = TetrisMenu(["Marathon", "Time Attack", "40 Lines"], [MarathonLevel, UltraLevel, LinesLevel])
-menu = TetrisMenu(["1 Player", "Options", "Scorecard"], [onePMode, TOptionsMenu(), TPlayerCard()], saveFile)
-if config['music']:
-        pygame.mixer.music.load("music"+os.sep+"menu_intro.ogg")
-        time.sleep(0.25)
-        pygame.mixer.music.play(0)
-        pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
-TFileSelect([x for x in os.listdir("saves")], menu).run()
-pygame.quit()
+        pygame.key.set_repeat(200,25)
+        pygame.event.set_blocked(pygame.MOUSEMOTION)
+        _song=None
+        highscores=[]
+        saveFile=None
+        if not os.path.exists("saves"):
+                os.mkdir("saves")
+        if not os.path.exists("screenshot"):
+                os.mkdir("screenshot")
+        if not os.path.exists("saves"+os.sep+"highscore"):
+                with open("saves"+os.sep+"highscore", 'w') as f:
+                        x=[[[] for x in range(10)] for x in range(2)]
+                        x.append([[[] for x in range (6)] for x in range(10)])
+                        json.dump(x, f)
+        with open("saves"+os.sep+"highscore") as f:
+                highscores=json.load(f)
+        def save_highscores():
+                with open("saves"+os.sep+"highscore", 'w') as f:
+                        json.dump(highscores, f)
+
+        bgscroll=pygame.Surface((config['cell_size']*21, config['cell_size']*19))
+        draw_matrix([[15+((x+y)%2) for x in range(21)] for y in range(18+config['cell_size'])], (0,0), bgscroll)
+        bgoffset=0
+        dont_burn_my_cpu = pygame.time.Clock()
+        MarathonLevel = TLevelSelect(("App", config['cell_size']*2, 0, "LVL"), title="Marathon")
+        UltraLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 5400), title="Time Attack")
+        LinesLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 0, 40, "HIGH"), 9, (0, 2, 4, 6, 8, 10), "40 Lines")
+        onePMode = TetrisMenu(["Marathon", "Time Attack", "40 Lines"], [MarathonLevel, UltraLevel, LinesLevel])
+        menu = TetrisMenu(["1 Player", "Options", "Scorecard"], [onePMode, TOptionsMenu(), TPlayerCard()], saveFile)
+        if config['music']:
+                pygame.mixer.music.load("music"+os.sep+"menu_intro.ogg")
+                time.sleep(0.25)
+                pygame.mixer.music.play(0)
+                pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
+        TFileSelect([x for x in os.listdir("saves")], menu).run()
+        pygame.quit()
