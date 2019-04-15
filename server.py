@@ -11,16 +11,13 @@ class SocketReader(object):
                 self.sock.shutdown(1)
                 self.sock.close()
 
-        def readable(self):
-                return bool(self.sock.recv(1, socket.MSG_PEEK))
-
         def send(self, data):
                 data = json.dumps(data).encode()
                 if len(data)>65535:
                         raise ValueError
-                size=int.to_bytes(len(data), 2, 'big')
+                size=int.to_bytes(len(data), 3, 'big')
                 totalsent = 0
-                while totalsent<2:
+                while totalsent<3:
                         sent=self.sock.send(size[totalsent:])
                         if sent==0:
                                 raise BrokenPipeError
@@ -36,15 +33,15 @@ class SocketReader(object):
         def receive(self):
                 chunks=bytes()
                 totalrecd=0
-                while totalrecd<2:
-                        chunk=self.sock.recv(2)
+                while totalrecd<3:
+                        chunk=self.sock.recv(3)
                         if not chunk:
                                 raise BrokenPipeError
                         totalrecd+=len(chunk)
                         chunks+=chunk
-                size=int.from_bytes(chunks[:2], 'big')
-                chunks=chunks[2:]
-                totalrecd-=2
+                size=int.from_bytes(chunks[:3], 'big')
+                chunks=chunks[3:]
+                totalrecd-=3
                 while totalrecd<size:
                         chunk=self.sock.recv(2048)
                         if not chunk:
@@ -53,16 +50,30 @@ class SocketReader(object):
                         chunks+=chunk
                 return json.loads(chunks.decode())
 
+chathistory=[]
+
 def handle_msg(sock):
         sock=SocketReader(sock)
-        data=sock.receive()
+        try:
+                data=sock.receive()
+        except ConnectionResetError:
+                data = 'quit'
         if data=='quit':
                 sock.close()
-                socks.remove(sock)
+                socks.remove(sock.sock)
         elif data=='stop':
-                for x in socks:
-                        x.close()
+                for x in socks[1:]:
+                        SocketReader(x).close()
                 raise StopIteration
+        elif data[:5]=='chat ':
+                chathistory.append(data[5:])
+                while len(chathistory)>100:
+                        chathistory.pop(0)
+                for x in socks[1:]:
+                        if x!=sock.sock:
+                                SocketReader(x).send(data)
+        elif data=='chathistory':
+                sock.send(chathistory)
         else:
                 sock.send(data)
 
@@ -74,7 +85,6 @@ while True:
         for x in rd:
                 if x==socks[0]:
                         accepted = (socks[0].accept())
-                        accepted[0].setblocking(False)
                         socks.append(accepted[0])
                         continue
                 handle_msg(x)

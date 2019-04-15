@@ -483,7 +483,11 @@ class TetrisApp(TetrisClass):
                                 elif event.type == pygame.QUIT:
                                         self.quit=True
                                 elif event.type == pygame.KEYDOWN:
-                                        if pygame.key.name(event.key) in key_actions:
+                                        if event.key==pygame.K_F12:
+                                                now = datetime.now()
+                                                pygame.image.save(display, "screenshot"+os.sep+"{}-{}-{}_{}-{}-{}.png".format(now.year, now.month, now.day, now.hour, now.minute, now.second))
+                                                play_sound("screenshot.ogg")
+                                        elif pygame.key.name(event.key) in key_actions:
                                                 key_actions[pygame.key.name(event.key)]()
                                         
                         if len(self.fade)>0:
@@ -662,16 +666,13 @@ class ClientSocket(object):
                 self.sock.shutdown(1)
                 self.sock.close()
 
-        def readable(self):
-                return bool(self.sock.recv(1, socket.MSG_PEEK))
-
         def send(self, data):
                 data = json.dumps(data).encode()
                 if len(data)>65535:
                         raise ValueError
-                size=int.to_bytes(len(data), 2, 'big')
+                size=int.to_bytes(len(data), 3, 'big')
                 totalsent = 0
-                while totalsent<2:
+                while totalsent<3:
                         sent=self.sock.send(size[totalsent:])
                         if sent==0:
                                 raise BrokenPipeError
@@ -687,15 +688,15 @@ class ClientSocket(object):
         def receive(self):
                 chunks=bytes()
                 totalrecd=0
-                while totalrecd<2:
-                        chunk=self.sock.recv(2)
+                while totalrecd<3:
+                        chunk=self.sock.recv(3)
                         if not chunk:
                                 raise BrokenPipeError
                         totalrecd+=len(chunk)
                         chunks+=chunk
-                size=int.from_bytes(chunks[:2], 'big')
-                chunks=chunks[2:]
-                totalrecd-=2
+                size=int.from_bytes(chunks[:3], 'big')
+                chunks=chunks[3:]
+                totalrecd-=3
                 while totalrecd<size:
                         chunk=self.sock.recv(2048)
                         if not chunk:
