@@ -50,7 +50,11 @@ class SocketReader(object):
                                 raise BrokenPipeError
                         totalrecd+=len(chunk)
                         chunks+=chunk
-                return json.loads(chunks.decode())
+                try:
+                        return json.loads(chunks.decode())
+                except ValueError:
+                        # Fine, YOU deal with it. Probably a plain string anyways.
+                        return chunks.decode()[1:-1]
 
 chathistory=[]
 nicks=[None]
@@ -66,14 +70,16 @@ def handle_msg(sock):
                 sock.sock.close()
                 del nicks[socks.index(sock.sock)]
                 socks.remove(sock.sock)
-        elif data=='stop':
+        elif data=='stop' and _DEBUG:
                 for x in socks[1:]:
                         SocketReader(x).close()
                 raise StopIteration
+        elif data=='isJTetris':
+                sock.send('yes')
         elif data=='nick':
                 sock.send(nicks[socks.index(sock.sock)])
         elif data[:5]=='nick ':
-                nicks[socks.index(sock.sock)]=data[5:17]
+                nicks[socks.index(sock.sock)]=data[5:15]
         elif data[:5]=='chat ':
                 if not nicks[socks.index(sock.sock)]:
                         sock.send("NoNick")

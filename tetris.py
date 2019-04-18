@@ -642,7 +642,7 @@ class ClientSocket(object):
                 if isinstance(sock, socket.socket):
                         self.sock = sock
                 elif sock and port:
-                        self.sock = socket.create_connection((host, port))
+                        self.sock = socket.create_connection((sock, port))
                 else:
                         self.sock = socket.socket()
 
@@ -656,6 +656,9 @@ class ClientSocket(object):
                 self.send("quit")
                 self.sock.shutdown(1)
                 self.sock.close()
+
+        def readable(self):
+                return bool(select.select([self.sock], [], [])[0])
 
         def send(self, data):
                 data = json.dumps(data).encode()
@@ -727,10 +730,17 @@ class TetrisMenu(TetrisClass):
                                 fade_in()
                         elif self.actions[self.selected]==None:
                                 play_sound("cancel.ogg")
-                        elif isinstance(self.actions[self.selected], types.FunctionType) or isinstance(self.actions[self.selected], tuple):
+                        elif isinstance(self.actions[self.selected], types.FunctionType):
                                 play_sound("ok.ogg")
                                 fade_out()
                                 self.actions[self.selected]()
+                                time.sleep(0.1)
+                                self.draw()
+                                fade_in()
+                        elif type(self.actions[self.selected]==type) and issubclass(self.actions[self.selected], TetrisClass):
+                                play_sound("ok.ogg")
+                                fade_out()
+                                self.actions[self.selected]().run()
                                 time.sleep(0.1)
                                 self.draw()
                                 fade_in()
@@ -1121,11 +1131,64 @@ class TOptionsMenu(TetrisMenu):
                         return
                 super().run()
 
+class ServerMenu(TetrisMenu):
+        def __init__(self, sock=None):
+                self.quit=False
+                if isinstance(sock, ClientSocket):
+                        self.sock=sock
+                elif isinstance(sock, str):
+                        port=7777
+                        if ':' in sock:
+                                port=int(sock.split(':')[1])
+                                sock=sock.split(':')[0]
+                        self.sock=ClientSocket(sock, port)
+                else:
+                        self.__init__(TTextInput("Server IP:", "127.0.0.1").run())
+                        return
+                self.sock.send('isJTetris')
+                time.sleep(0.5)
+                if self.sock.readable():
+                        if self.sock.receive()!="yes":
+                                self.sock.sock.shutdown(1)
+                                self.sock.sock.close()
+                                raise ConnectionResetError
+                else:
+                        self.sock.sock.shutdown(1)
+                        self.sock.sock.close()
+                        raise ConnectionResetError
+                self.sock.send('nick '+saveFile)
+                self.sock.send('chathistory')
+                self.chathistory=self.sock.receive()
+                self.sock.send('nicks')
+                self.users=self.sock.receive()
+                if config['music']:
+                        pygame.mixer.music.set_endevent()
+                        pygame.mixer.music.fadeout(1000)
+
+        def drawUI(self):
+                self.UI=pygame.Surface((17*config['cell_size'], 15*config['cell_size']))
+                self.UI.fill(bg_colors[4])
+                self.UI.set_colorkey(bg_colors[4])
+                draw_matrix([[13,13,13,13,13,13,13,13,13,13,0,13,13,13,13,13,13] for _ in range(15)], (0,0), self.UI)
+
+        def draw(self):
+                display.blit(bgscroll, (bgoffset, bgoffset))
+                display.blit(self.UI, (1.5*config['cell_size'], 1.5*config['cell_size']))
+
+        def handle_key(self, key):
+                self.quit=True
+
+        def run(self):
+                super().run()
+                self.sock.close()
+                if config['music']:
+                        play_song("menu.ogg")
+
 if __name__=="__main__":                        
         pygame.init()
         if config['music']:
                 pygame.mixer.init()
-        display = pygame.display.set_mode((config['cell_size']*(20), config['cell_size']*18))
+        display = pygame.display.set_mode((config['cell_size']*20, config['cell_size']*18))
         pygame.display.set_caption("Tetris DX")
         tiles = [None]
 
@@ -1174,7 +1237,7 @@ if __name__=="__main__":
         UltraLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 5400), title="Time Attack")
         LinesLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 0, 40, "HIGH"), 9, (0, 2, 4, 6, 8, 10), "40 Lines")
         onePMode = TetrisMenu(["Marathon", "Time Attack", "40 Lines"], [MarathonLevel, UltraLevel, LinesLevel])
-        menu = TetrisMenu(["1 Player", "Options", "Scorecard"], [onePMode, TOptionsMenu(), TPlayerCard()], saveFile)
+        menu = TetrisMenu(["1 Player", "2P Test", "Options", "Scorecard"], [onePMode, ServerMenu, TOptionsMenu(), TPlayerCard()], saveFile)
         if config['music']:
                 pygame.mixer.music.load("music"+os.sep+"menu_intro.ogg")
                 time.sleep(0.25)
