@@ -1157,6 +1157,7 @@ class ServerMenu(TetrisMenu):
                         self.sock.sock.close()
                         raise ConnectionResetError
                 self.sock.send('nick '+saveFile)
+                print('', end='')
                 self.sock.send('chathistory')
                 self.chathistory=self.sock.receive()
                 self.sock.send('nicks')
@@ -1170,10 +1171,13 @@ class ServerMenu(TetrisMenu):
                 self.UI.fill(bg_colors[4])
                 self.UI.set_colorkey(bg_colors[4])
                 draw_matrix([[13,13,13,13,13,13,13,13,13,13,0,13,13,13,13,13,13] for _ in range(15)], (0,0), self.UI)
+                pygame.draw.line(self.UI, bg_colors[5], (0, 14*config['cell_size']-3), (10*config['cell_size']-3, 14*config['cell_size']-3), 3)
 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
                 display.blit(self.UI, (1.5*config['cell_size'], 1.5*config['cell_size']))
+                for x in range(len(self.users)):
+                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.users[x], False, bg_colors[5]), (13.5*config['cell_size'], (1.75+x)*config['cell_size']))
 
         def handle_key(self, key):
                 self.quit=True
