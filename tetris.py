@@ -658,7 +658,7 @@ class ClientSocket(object):
                 self.sock.close()
 
         def readable(self):
-                return bool(select.select([self.sock], [], [])[0])
+                return bool(select.select([self.sock], [], [], 0)[0])
 
         def send(self, data):
                 data = json.dumps(data).encode()
@@ -939,7 +939,7 @@ class TFileSelect(TetrisMenu):
                         play_sound("ok.ogg")
                         if self.selected+2==len(self.menu):
                                 fade_out()
-                                name=TTextInput("Name Entry").run()
+                                name=TTextInput("Name Entry").run()[:10].strip()
                                 if name and not (name=="Guest" or os.path.exists("saves"+os.sep+name)):
                                         with open("saves"+os.sep+name, 'w') as f:
                                                 json.dump([[],[],[],0,0,0,0], f)
@@ -1024,14 +1024,12 @@ class TTextInput(TetrisMenu):
 
                         dont_burn_my_cpu.tick(30)
                 play_sound("cancel.ogg")
-                self.quit=False
-                self.selected=0
                 fade_out()
-                return self.text
+                return self.text.strip()
 
 class TMessage(TetrisMenu):
         def __init__(self, msg):
-                self.msg = msg
+                self.msg = msg.strip()
                 self.quit = False
                 self.yn = False
 
@@ -1162,9 +1160,7 @@ class ServerMenu(TetrisMenu):
                 self.chathistory=self.sock.receive()
                 self.sock.send('nicks')
                 self.users=self.sock.receive()
-                if config['music']:
-                        pygame.mixer.music.set_endevent()
-                        pygame.mixer.music.fadeout(1000)
+                self.text=""
 
         def drawUI(self):
                 self.UI=pygame.Surface((17*config['cell_size'], 15*config['cell_size']))
@@ -1172,18 +1168,69 @@ class ServerMenu(TetrisMenu):
                 self.UI.set_colorkey(bg_colors[4])
                 draw_matrix([[13,13,13,13,13,13,13,13,13,13,0,13,13,13,13,13,13] for _ in range(15)], (0,0), self.UI)
                 pygame.draw.line(self.UI, bg_colors[5], (0, 14*config['cell_size']-3), (10*config['cell_size']-3, 14*config['cell_size']-3), 3)
-
+                if not len(self.chathistory):
+                        return
+                x=0
+                i=len(self.chathistory)
+                while x<14 and i>0:
+                        y=0
+                        i-=1
+                        while y<len(self.chathistory[i]):
+                                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.chathistory[i][y:y+21], False, bg_colors[5]), (0, x*config['cell_size']))
+                                x+=1
+                                y+=21
+                                if x>13:
+                                        y=999999
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
                 display.blit(self.UI, (1.5*config['cell_size'], 1.5*config['cell_size']))
                 for x in range(len(self.users)):
                         display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.users[x], False, bg_colors[5]), (13.5*config['cell_size'], (1.75+x)*config['cell_size']))
+                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.text[-20:], False, bg_colors[5]), (1.5*config['cell_size'], 15.5*config['cell_size']))
 
-        def handle_key(self, key):
-                self.quit=True
+        def handle_key(self, key, unicode):
+                if key=="escape":
+                        self.quit=True
+                elif key=="return":
+                        self.text=self.text.strip()
+                        if self.text:
+                                self.sock.send('chat '+self.text)
+                                self.chathistory.append(saveFile+": "+self.text)
+                                self.drawUI()
+                        self.text=""
+                elif key=="backspace":
+                        self.text=self.text[:-1]
+                elif len(unicode)==1:
+                        self.text+=unicode
 
         def run(self):
-                super().run()
+                global bgoffset
+                if config['music']:
+                        pygame.mixer.music.set_endevent()
+                        pygame.mixer.music.fadeout(1000)
+                self.drawUI()
+                self.draw()
+                fade_in()
+                while not self.quit:
+                        self.draw()
+                        pygame.display.flip()
+                        if self.sock.readable():
+                                        msg=self.sock.receive()
+
+                        for event in pygame.event.get():
+                                if event.type == pygame.USEREVENT+3:
+                                        bgoffset = (bgoffset-1) % -config['cell_size']
+                                elif event.type == pygame.QUIT:
+                                        self.sock.close()
+                                        fade_out()
+                                        pygame.quit()
+                                        sys.exit()
+                                elif event.type == pygame.KEYDOWN:
+                                        self.handle_key(pygame.key.name(event.key), event.unicode)
+
+                        dont_burn_my_cpu.tick(30)
+                play_sound("cancel.ogg")
+                fade_out()
                 self.sock.close()
                 if config['music']:
                         play_song("menu.ogg")

@@ -79,17 +79,17 @@ def handle_msg(sock):
         elif data=='nick':
                 sock.send(nicks[socks.index(sock.sock)])
         elif data[:5]=='nick ':
-                nicks[socks.index(sock.sock)]=data[5:15]
+                nicks[socks.index(sock.sock)]=data[5:15].strip()
         elif data[:5]=='chat ':
                 if not nicks[socks.index(sock.sock)]:
                         sock.send("NoNick")
                         return
-                chathistory.append(nicks[socks.index(sock.sock)]+': '+data[5:2053])
+                chathistory.append(nicks[socks.index(sock.sock)]+': '+data[5:293].strip())
                 while len(chathistory)>100:
                         chathistory.pop(0)
                 for x in socks[1:]:
                         if x!=sock.sock:
-                                SocketReader(x).send('chat '+nicks[socks.index(sock.sock)]+': '+data[5:2053])
+                                SocketReader(x).send('chat '+nicks[socks.index(sock.sock)]+': '+data[5:293].strip())
         elif data=='chathistory':
                 sock.send(chathistory)
         elif data=='connected' and _DEBUG:
