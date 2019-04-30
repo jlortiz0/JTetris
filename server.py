@@ -56,13 +56,14 @@ class SocketReader(object):
                         # Fine, YOU deal with it. Probably a plain string anyways.
                         return chunks.decode()[1:-1]
 
-chathistory=[]
 nicks=[None]
 
 def handle_msg(sock):
         sock=SocketReader(sock)
         try:
                 data=sock.receive()
+                if isinstance(data, str):
+                        data=data.strip()
         except (ConnectionResetError, BrokenPipeError):
                 data = 'quit'
         if data=='quit':
@@ -79,19 +80,17 @@ def handle_msg(sock):
         elif data=='nick':
                 sock.send(nicks[socks.index(sock.sock)])
         elif data[:5]=='nick ':
-                nicks[socks.index(sock.sock)]=data[5:15].strip()
-        elif data[:5]=='chat ':
-                if not nicks[socks.index(sock.sock)]:
-                        sock.send("NoNick")
+                if data[5:15].strip()=='None' or not data[5:15].strip():
+                        sock.send("BadNick")
                         return
-                chathistory.append(nicks[socks.index(sock.sock)]+': '+data[5:293].strip())
-                while len(chathistory)>100:
-                        chathistory.pop(0)
+                if data[5:15].strip() in nicks:
+                        # Add some proper handling for this later
+                        sock.send("NickInUse")
+                        return
                 for x in socks[1:]:
                         if x!=sock.sock:
-                                SocketReader(x).send('chat '+nicks[socks.index(sock.sock)]+': '+data[5:293].strip())
-        elif data=='chathistory':
-                sock.send(chathistory)
+                                SocketReader(x).send('join '+data[5:15].strip()+' '+str(nicks[socks.index(sock.sock)]))
+                nicks[socks.index(sock.sock)]=data[5:15].strip()
         elif data=='connected' and _DEBUG:
                 sock.send([x.getpeername()[0] for x in socks[1:]])
         elif data[:6]=='rsend ' and _DEBUG:
@@ -102,7 +101,9 @@ def handle_msg(sock):
                 if data[6:] in nicks:
                         sock.send(nicks.index(data[6:]))
                 else:
-                        sock.send("None")
+                        sock.send(None)
+        elif data[:10]=='challenge':
+                pass
         else:
                 sock.send(data)
 
@@ -121,6 +122,6 @@ while True:
                         
         for x in err:
                 x.close()
-                sockets.remove(x)
+                socks.remove(x)
                 del nicks[x]
         

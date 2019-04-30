@@ -1139,7 +1139,12 @@ class ServerMenu(TetrisMenu):
                         if ':' in sock:
                                 port=int(sock.split(':')[1])
                                 sock=sock.split(':')[0]
-                        self.sock=ClientSocket(sock, port)
+                        try:
+                                self.sock=ClientSocket(sock, port)
+                        except ConnectionError:
+                                self.quit=True
+                                TMessage("There was an error\nconnecting to\n"+sock).run()
+                                return
                 else:
                         self.__init__(TTextInput("Server IP:", "127.0.0.1").run())
                         return
@@ -1160,50 +1165,54 @@ class ServerMenu(TetrisMenu):
                 self.chathistory=self.sock.receive()
                 self.sock.send('nicks')
                 self.users=self.sock.receive()
-                self.text=""
+                self.selected=[0,0]
 
         def drawUI(self):
+                # Should the player's own name be drawn?
                 self.UI=pygame.Surface((17*config['cell_size'], 15*config['cell_size']))
                 self.UI.fill(bg_colors[4])
                 self.UI.set_colorkey(bg_colors[4])
-                draw_matrix([[13,13,13,13,13,13,13,13,13,13,0,13,13,13,13,13,13] for _ in range(15)], (0,0), self.UI)
-                pygame.draw.line(self.UI, bg_colors[5], (0, 14*config['cell_size']-3), (10*config['cell_size']-3, 14*config['cell_size']-3), 3)
-                if not len(self.chathistory):
-                        return
-                x=0
-                i=len(self.chathistory)
-                while x<14 and i>0:
-                        y=0
-                        i-=1
-                        while y<len(self.chathistory[i]):
-                                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.chathistory[i][y:y+21], False, bg_colors[5]), (0, x*config['cell_size']))
-                                x+=1
-                                y+=21
-                                if x>13:
-                                        y=999999
+                draw_matrix([[13,13,13,13,13,0,13,13,13,13,13,0,13,13,13,13,13] for _ in range(15)], (0,0), self.UI)
+                for x in range(len(self.users[:15])):
+                        self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.users[x], False, bg_colors[5]), (config['cell_size'], (0.25+x)*config['cell_size']))
+                for x in range(len(self.users[16:30])):
+                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.users[x], False, bg_colors[5]), (7*config['cell_size'], (0.25+x)*config['cell_size']))
+                for x in range(len(self.users[31:45])):
+                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.users[x], False, bg_colors[5]), (13*config['cell_size'], (0.25+x)*config['cell_size']))
+                
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
                 display.blit(self.UI, (1.5*config['cell_size'], 1.5*config['cell_size']))
-                for x in range(len(self.users)):
-                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.users[x], False, bg_colors[5]), (13.5*config['cell_size'], (1.75+x)*config['cell_size']))
-                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.text[-20:], False, bg_colors[5]), (1.5*config['cell_size'], 15.5*config['cell_size']))
+                draw_matrix([[17]], (1.5+self.selected[0]*6, 1.5+self.selected[1]), display)
 
-        def handle_key(self, key, unicode):
+        def handle_key(self, key):
                 if key=="escape":
                         self.quit=True
                 elif key=="return":
-                        self.text=self.text.strip()
-                        if self.text:
-                                self.sock.send('chat '+self.text)
-                                self.chathistory.append(saveFile+": "+self.text)
-                                self.drawUI()
-                        self.text=""
-                elif key=="backspace":
-                        self.text=self.text[:-1]
-                elif len(unicode)==1:
-                        self.text+=unicode
+                        selected=self.selected[1]+self.selected[0]*15
+                        if len(self.users)>selected:
+                                print(self.users[selected])
+                        play_sound("ok.ogg")
+                elif key=="left":
+                        self.selected[0]-=1
+                        self.selected[0]%=3
+                        play_sound("select.ogg")
+                elif key=="right":
+                        self.selected[0]+=1
+                        self.selected[0]%=3
+                        play_sound("select.ogg")
+                elif key=="down":
+                        self.selected[1]+=1
+                        self.selected[1]%=15
+                        play_sound("select.ogg")
+                elif key=="up":
+                        self.selected[1]-=1
+                        self.selected[1]%=15
+                        play_sound("select.ogg")
 
         def run(self):
+                if self.quit:
+                        return
                 global bgoffset
                 if config['music']:
                         pygame.mixer.music.set_endevent()
@@ -1215,7 +1224,14 @@ class ServerMenu(TetrisMenu):
                         self.draw()
                         pygame.display.flip()
                         if self.sock.readable():
-                                        msg=self.sock.receive()
+                                msg=self.sock.receive()
+                                if msg[:5]=='join ':
+                                        msg=msg.split(' ')
+                                        if msg[2]=='None' or not msg[2] in self.users:
+                                                self.users.append(msg[1])
+                                        else:
+                                                self.users[self.users.index(msg[2])]=msg[1]
+                                        self.drawUI()
 
                         for event in pygame.event.get():
                                 if event.type == pygame.USEREVENT+3:
@@ -1226,7 +1242,7 @@ class ServerMenu(TetrisMenu):
                                         pygame.quit()
                                         sys.exit()
                                 elif event.type == pygame.KEYDOWN:
-                                        self.handle_key(pygame.key.name(event.key), event.unicode)
+                                        self.handle_key(pygame.key.name(event.key))
 
                         dont_burn_my_cpu.tick(30)
                 play_sound("cancel.ogg")
