@@ -45,16 +45,16 @@ class SocketReader(object):
                 chunks=chunks[3:]
                 totalrecd-=3
                 while totalrecd<size:
-                        chunk=self.sock.recv(2048)
+                        chunk=self.sock.recv(min(2048, size-totalrecd))
                         if not chunk:
                                 raise BrokenPipeError
                         totalrecd+=len(chunk)
                         chunks+=chunk
                 try:
-                        return json.loads(chunks.decode())
+                        return json.loads(chunks.decode().strip())
                 except ValueError:
                         # Fine, YOU deal with it. Probably a plain string anyways.
-                        return chunks.decode()[1:-1]
+                        return chunks.decode().strip()[1:-1]
 
 nicks=[None]
 
@@ -67,6 +67,10 @@ def handle_msg(sock):
         except (ConnectionResetError, BrokenPipeError):
                 data = 'quit'
         if data=='quit':
+                if nicks[socks.index(sock.sock)]:
+                        for x in socks[1:]:
+                                if x!=sock.sock:
+                                        SocketReader(x).send('leave '+nicks[socks.index(sock.sock)])
                 sock.sock.shutdown(1)
                 sock.sock.close()
                 del nicks[socks.index(sock.sock)]
@@ -97,13 +101,17 @@ def handle_msg(sock):
                 SocketReader(socks[int(data.split(' ')[1])]).send(' '.join(data.split(' ')[2:]))
         elif data=='nicks':
                 sock.send(nicks[1:])
-        elif data[:6]=='rnick ':
-                if data[6:] in nicks:
-                        sock.send(nicks.index(data[6:]))
+        elif data[:6]=='rnick ' and _DEBUG:
+                if data[6:16] in nicks:
+                        sock.send(nicks.index(data[6:16]))
                 else:
                         sock.send(None)
-        elif data[:10]=='challenge':
-                pass
+        elif data[:10]=='challenge ':
+                if data[10:20].strip() in nicks:
+                        sock.send("sent")
+                        SocketReader(socks[nicks.index(data[10:20])]).send("challenged "+nicks[socks.index(sock.sock)])
+                else:
+                        sock.send("BadNick")
         else:
                 sock.send(data)
 

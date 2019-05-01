@@ -134,15 +134,15 @@ def draw_matrix(matrix, offset, screen):
                                         screen.blit(tiles[val],((off_x+x) * config['cell_size'],
                                                         (off_y+y) * config['cell_size']))
 
-sound_library={}
+_sound_library={}
 def play_sound(path):
         if not config['sound']:
                 return
-        global sound_library
-        sound=sound_library.get(path)
+        global _sound_library
+        sound=_sound_library.get(path)
         if sound is None:
                 sound=pygame.mixer.Sound("sound"+os.sep+path)
-                sound_library[path]=sound
+                _sound_library[path]=sound
         sound.play()
 
 _song=None
@@ -181,8 +181,12 @@ def fade_in():
         pygame.time.set_timer(pygame.USEREVENT+3, 100)
         pygame.event.clear(pygame.KEYDOWN)
 
+_font=None
 def draw_text(text, pos, surf, color=bg_colors[5], bg=None):
-        surf.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(text, False, color, bg), [config['cell_size']*x for x in pos])
+        global _font
+        if not _font:
+                _font=pygame.font.Font("joystix.ttf", config['cell_size']//2+2)
+        surf.blit(_font.render(text, False, color, bg), [config['cell_size']*x for x in pos])
 
 class TetrisClass:
         def draw(self):
@@ -698,7 +702,7 @@ class ClientSocket(object):
                 chunks=chunks[3:]
                 totalrecd-=3
                 while totalrecd<size:
-                        chunk=self.sock.recv(2048)
+                        chunk=self.sock.recv(min(2048, size-totalrecd))
                         if not chunk:
                                 raise BrokenPipeError
                         totalrecd+=len(chunk)
@@ -1029,7 +1033,7 @@ class TTextInput(TetrisMenu):
                         dont_burn_my_cpu.tick(30)
                 play_sound("cancel.ogg")
                 fade_out()
-                return self.text.strip()
+                return self.text
 
 class TMessage(TetrisMenu):
         def __init__(self, msg):
@@ -1164,7 +1168,6 @@ class ServerMenu(TetrisMenu):
                         self.sock.sock.close()
                         raise ConnectionResetError
                 self.sock.send('nick '+saveFile)
-                print('', end='')
                 self.sock.send('nicks')
                 self.users=self.sock.receive()
                 self.selected=[0,0]
@@ -1192,9 +1195,14 @@ class ServerMenu(TetrisMenu):
                         self.quit=True
                 elif key=="return":
                         selected=self.selected[1]+self.selected[0]*15
-                        if len(self.users)>selected:
-                                print(self.users[selected])
-                        play_sound("ok.ogg")
+                        if len(self.users)>selected and self.users[selected]!=saveFile:
+                                self.sock.send("challenge "+self.users[selected])
+                                play_sound("ok.ogg")
+                                fade_out()
+                                TMessage("Waiting for "+self.users[selected]+"...").run()
+                                fade_in()
+                        else:
+                                play_sound("cancel.ogg")
                 elif key=="left":
                         self.selected[0]-=1
                         self.selected[0]%=3
@@ -1227,6 +1235,7 @@ class ServerMenu(TetrisMenu):
                         pygame.display.flip()
                         if self.sock.readable():
                                 msg=self.sock.receive()
+                                print(msg)
                                 if msg[:5]=='join ':
                                         msg=msg.split(' ')
                                         if msg[2]=='None' or not msg[2] in self.users:
@@ -1234,6 +1243,18 @@ class ServerMenu(TetrisMenu):
                                         else:
                                                 self.users[self.users.index(msg[2])]=msg[1]
                                         self.drawUI()
+                                elif msg[:6]=='leave ':
+                                        msg=msg[6:]
+                                        if msg!='None' and msg in self.users:
+                                                self.users.remove(msg)
+                                                self.drawUI()
+                                elif msg[:11]=='challenged ':
+                                        msg=msg[11:]
+                                        if msg in self.users:
+                                                play_sound("challenger.ogg")
+                                                fade_out()
+                                                TMessage(msg+" has challenged\nyou to a match!\nZ - Accept  X - Don't").run()
+                                                fade_in()
 
                         for event in pygame.event.get():
                                 if event.type == pygame.USEREVENT+3:
