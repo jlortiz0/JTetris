@@ -181,23 +181,27 @@ def fade_in():
         pygame.time.set_timer(pygame.USEREVENT+3, 100)
         pygame.event.clear(pygame.KEYDOWN)
 
-class TetrisClass(object):
+def draw_text(text, pos, surf, color=bg_colors[5], bg=None):
+        surf.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(text, False, color, bg), [config['cell_size']*x for x in pos])
+
+class TetrisClass:
         def draw(self):
+                raise NotImplementedError
+
+        def drawUI(self):
                 raise NotImplementedError
 
         def run(self):
                 raise NotImplementedError
 
 class TetrisApp(TetrisClass):
-        def __init__(self, off_x, off_y, level=0):
+        def __init__(self, level=0):
                 self.quit=False
                 self.rage=False
                 self.lineNums = [0,0,0,0]
                 self.width = config['cell_size']*10
                 self.height = config['cell_size']*18
-                self.screen = display.subsurface(pygame.Rect(off_x, off_y, self.width, self.height))
-                self.off_x=off_x//config['cell_size']
-                self.off_y=off_y//config['cell_size']
+                self.screen = display.subsurface(pygame.Rect(2*config['cell_size'], 0, self.width, self.height))
                 self.board = new_board()
                 self.next_stone=[random.choice(tetris_shapes), random.choice(tetris_shapes)]
                 self.new_stone()
@@ -228,19 +232,19 @@ class TetrisApp(TetrisClass):
                                 else:
                                         self.screen.fill((200,0,0))
                                         draw_matrix(self.board, (0,-1), self.screen)
-                                pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                                pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                 time.sleep(0.4)
                         if config['music']:
                                 pygame.mixer.music.stop()
                         play_sound("gameover.ogg")
                         for x in range(17, -1, -1):
                                 draw_matrix([[4 for _ in range(10)]], (0, x), self.screen)
-                                pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                                pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                 time.sleep(0.02)
                         time.sleep(0.4)
                         self.screen.fill((0,0,0))
                         self.center_msg("Game Over!")
-                        pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                        pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                         time.sleep(2)
 
         def level_up(self):
@@ -253,8 +257,8 @@ class TetrisApp(TetrisClass):
                         pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
                 if (self.level % 5)==0 and self.level/5<len(bg_colors)+1:
                         self.fade=[0, self.bgcolor, bg_colors[self.level//5]]
-                draw_matrix([[13, 13, 13, 13]], (self.off_x+4, self.off_y+11), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.level), False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*11.1))
+                draw_matrix([[13, 13, 13, 13]], (4, 11), self.UI)
+                draw_text(str(self.level), (4.3, 11.1), self.UI)
         
         def center_msg(self, msg):
                 for i, line in enumerate(msg.splitlines()):
@@ -318,8 +322,8 @@ class TetrisApp(TetrisClass):
                 global bgoffset
                 self.stone=[]
                 self.lineNums[len(rows)-1]+=1
-                draw_matrix([[13, 13, 13, 13]], (self.off_x+4, self.off_y+13), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.lines), False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*13.1))
+                draw_matrix([[13, 13, 13, 13]], (4, 13), self.UI)
+                draw_text(str(self.lines), (4.3, 13.1), self.UI)
                 if len(rows)>3:
                         play_sound("4lines.ogg")
                         self.score+=(self.level+1)*1200
@@ -400,7 +404,7 @@ class TetrisApp(TetrisClass):
         def toggle_pause(self):
                 self.screen.fill((0,0,0))
                 self.center_msg("Paused")
-                pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                 self.paused = not self.paused
                 play_sound("pause.ogg")
                 if not config['music']:
@@ -415,15 +419,29 @@ class TetrisApp(TetrisClass):
                         self.quit=True
                         self.rage=True
 
+        def drawUI(self):
+                self.UI=pygame.Surface((config['cell_size']*8, config['cell_size']*18))
+                self.UI.fill((128,128,128))
+                self.UI.set_colorkey((128,128,128))
+                draw_matrix([[14] for _ in range(18)], (0, 0), self.UI)
+                draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (2, 2), self.UI)
+                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 9), self.UI)
+                draw_text("Score:", (1.3, 9.1), self.UI)
+                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 11), self.UI)
+                draw_text("Level:", (1.3, 11.1), self.UI)
+                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 13), self.UI)
+                draw_text("Lines:", (1.3, 13.1), self.UI)
+                draw_text(str(self.level), (4.3, 11.1), self.UI)
+                draw_text("0", (4.3, 13.1), self.UI)
+
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
-                display.blit(self.UI, (config['cell_size']*10, 0))
-                draw_matrix(self.next_stone[0], (self.off_x+13, self.off_y+3), display)
+                display.blit(self.UI, (config['cell_size']*12, 0))
+                draw_matrix(self.next_stone[0], (15, 3), display)
                 if self.score>9999999:
                         self.score=9999999
-                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.score), False, (0,0,0)), (config['cell_size']*16.3, config['cell_size']*9.1))
-                draw_matrix([[14] for _ in range(18)], (self.off_x-1,0), display)
-                draw_matrix([[14] for _ in range(18)], (10+self.off_x,0), display)
+                draw_text(str(self.score), (16.3, 9.1), display)
+                draw_matrix([[14] for _ in range(18)], (1,0), display)
                 self.screen.fill(self.bgcolor)
                 draw_matrix(self.board, (0,-1), self.screen)
                 draw_matrix(self.stone,(self.stone_x, self.stone_y-0.925), self.screen)
@@ -437,26 +455,13 @@ class TetrisApp(TetrisClass):
                         'z':            lambda:self.rotate_stone(-1),
                         'x':            lambda:self.rotate_stone(+1),
                         'return':       self.toggle_pause,
-                        'space':        self.exit,
-                        'y':            self.level_up
+                        'space':        self.exit
                 }
 
                 self.paused = False
                 self.fade=()
                 
-                self.UI=pygame.Surface((config['cell_size']*16, config['cell_size']*19))
-                self.UI.fill((128,128,128))
-                self.UI.set_colorkey((128,128,128))
-                draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (self.off_x+2, self.off_y+2), self.UI)
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+9), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Score:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+9.1)*config['cell_size']))
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+11), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Level:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+11.1)*config['cell_size']))
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+13), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Lines:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+13.1)*config['cell_size']))
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.level), False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*11.1))
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("0", False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*13.1))
-
+                self.drawUI()
                 self.draw()
                 play_song("dxa1.ogg")
                 fade_in()
@@ -495,8 +500,8 @@ class TetrisApp(TetrisClass):
                 pygame.time.set_timer(pygame.USEREVENT+1, 0)
 
 class TetrisTimed(TetrisApp):
-        def __init__(self, off_x, off_y, level=0, time=0, lines=0, height=0):
-                super().__init__(off_x, off_y, level)
+        def __init__(self, level=0, time=0, lines=0, height=0):
+                super().__init__(level)
                 self.count = (time>0)
                 self.timer = time
                 self.linec = (lines>0)
@@ -512,38 +517,51 @@ class TetrisTimed(TetrisApp):
                         self.bgcolor=bg_colors[2]
                         self.next_stone=[[[]], [[]]]
                         self.draw()
-                        pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                        pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                         time.sleep(1)
                         if config['music']:
                                 pygame.mixer.music.stop()
                         play_sound("gameover.ogg")
                         for x in range(17, -1, -1):
                                 draw_matrix([[1 for _ in range(10)]], (0, x), self.screen)
-                                pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                                pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                 time.sleep(0.02)
                         time.sleep(0.4)
                         self.screen.fill((0,0,0))
                         self.center_msg("Cleared!")
-                        pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                        pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                         time.sleep(2)
                         self.quit=True
 
         def level_up(self):
                 pass
 
+        def drawUI(self):
+                self.UI=pygame.Surface((config['cell_size']*8, config['cell_size']*18))
+                self.UI.fill((128,128,128))
+                self.UI.set_colorkey((128,128,128))
+                draw_matrix([[14] for _ in range(18)], (0, 0), self.UI)
+                draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (2, 2), self.UI)
+                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 9), self.UI)
+                draw_text("Score:", (1.3, 9.1), self.UI)
+                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 11), self.UI)
+                draw_text("Time:", (1.3, 11.1), self.UI)
+                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 13), self.UI)
+                draw_text("Lines:", (1.3, 13.1), self.UI)
+                draw_text("0", (4.3, 13.1), self.UI)
+
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
                 if self.linec:
-                        draw_matrix([[13, 13, 13, 13]], (self.off_x+4, self.off_y+13), self.UI)
-                        self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(max(0, self.linesClear-self.lines)), False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*13.1))
-                display.blit(self.UI, (config['cell_size']*10, 0))
-                draw_matrix(self.next_stone[0], (self.off_x+13, self.off_y+3), display)
+                        draw_matrix([[13, 13, 13, 13]], (4, 13), self.UI)
+                        draw_text(str(max(0, self.linesClear-self.lines)), (4.3, 13.1), self.UI)
+                display.blit(self.UI, (config['cell_size']*12, 0))
+                draw_matrix(self.next_stone[0], (15, 3), display)
                 if self.score>9999999:
                         self.score=9999999
-                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(str(self.score), False, (0,0,0)), (config['cell_size']*16.3, config['cell_size']*9.1))
-                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("{0}:{1:02}".format(self.timer//1800, self.timer//30 % 60), False, (0,0,0)), (config['cell_size']*15.7, config['cell_size']*11.1))
-                draw_matrix([[14] for _ in range(18)], (self.off_x-1,0), display)
-                draw_matrix([[14] for _ in range(18)], (10+self.off_x,0), display)
+                draw_text(str(self.score), (16.3, 9.1), display)
+                draw_text("{0}:{1:02}".format(self.timer//1800, self.timer//30 % 60), (15.7, 11.1), display)
+                draw_matrix([[14] for _ in range(18)], (1,0), display)
                 self.screen.fill(self.bgcolor)
                 draw_matrix(self.board, (0,-1), self.screen)
                 draw_matrix(self.stone,(self.stone_x, self.stone_y-0.925), self.screen)
@@ -557,24 +575,12 @@ class TetrisTimed(TetrisApp):
                         'z':            lambda:self.rotate_stone(-1),
                         'x':            lambda:self.rotate_stone(+1),
                         'return':       self.toggle_pause,
-                        'space':        self.exit,
-                        'y':            self.level_up
+                        'space':        self.exit
                 }
 
                 self.paused = False
-                
-                self.UI=pygame.Surface((config['cell_size']*16, config['cell_size']*19))
-                self.UI.fill((128,128,128))
-                self.UI.set_colorkey((128,128,128))
-                draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (self.off_x+2, self.off_y+2), self.UI)
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+9), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Score:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+9.1)*config['cell_size']))
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+11), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Time:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+11.1)*config['cell_size']))
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (self.off_x+1, self.off_y+13), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Lines:", False, (0,0,0)), ((self.off_x+1.3)*config['cell_size'], (self.off_y+13.1)*config['cell_size']))
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("0", False, (0,0,0)), (config['cell_size']*6.3, config['cell_size']*13.1))
 
+                self.drawUI()
                 self.draw()
                 play_song("dxa1.ogg")
                 fade_in()
@@ -611,19 +617,19 @@ class TetrisTimed(TetrisApp):
                                         self.next_stone=[[]]
                                         self.stone=self.next_stone
                                         self.draw()
-                                        pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                                        pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                         time.sleep(1)
                                         if config['music']:
                                                 pygame.mixer.music.stop()
                                         play_sound("gameover.ogg")
                                         for x in range(17, -1, -1):
                                                 draw_matrix([[1 for _ in range(10)]], (0, x), self.screen)
-                                                pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                                                pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                                 time.sleep(0.02)
                                         time.sleep(0.4)
                                         self.screen.fill((0,0,0))
                                         self.center_msg("Time Up!")
-                                        pygame.display.update(pygame.Rect(self.off_x*config['cell_size'], self.off_y*config['cell_size'], 10*config['cell_size'], 18*config['cell_size']))
+                                        pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                         time.sleep(2)
                                         self.quit=True
                                 elif self.timer<301 and self.timer%30 == 0:
@@ -716,7 +722,7 @@ class TetrisMenu(TetrisClass):
                 display.blit(self.UI, (self.length, (9-len(self.menu)/2)*config['cell_size']))
                 draw_matrix([[17]], (self.length/config['cell_size'], self.selected+9-len(self.menu)/2) , display)
                 if self.title:
-                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.title, False, (0,0,0), (255,255,255)), ((10.5-len(self.title)/4)*config['cell_size'], (7-len(self.menu)/2)*config['cell_size']))
+                        draw_text(self.title, (10.5-len(self.title)/4, 7-len(self.menu)/2), display, bg=(255, 255, 255))
 
         def handle_key(self, key):
                 global bgoffset
@@ -765,7 +771,7 @@ class TetrisMenu(TetrisClass):
                 self.UI=pygame.Surface(((longest//2+2)*config['cell_size'], len(self.menu)*config['cell_size']))
                 for x in range(len(self.menu)):
                         draw_matrix([[13 for _ in range(longest//2+2)]], (0, x), self.UI)
-                        self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.menu[x], False, (0,0,0)), (1.5*config['cell_size'], x*config['cell_size']))
+                        draw_text(self.menu[x], (1.5, x), self.UI)
                         
         def run(self):
                 global bgoffset
@@ -802,6 +808,8 @@ class TetrisMenu(TetrisClass):
 
 class TLevelSelect(TetrisMenu):
         def __init__(self, action, levels=9, heights=[0], title=""):
+                if type(action[0])!=type or not issubclass(action[0], TetrisClass):
+                        raise TypeError("Expected action[0] to be subclass of TetrisClass")
                 self.quit=False
                 self.levels=levels+1
                 self.heights=heights
@@ -820,10 +828,7 @@ class TLevelSelect(TetrisMenu):
                                 temp[temp.index("HIGH")]=self.heights[self.selHeight]
                         play_sound("ok.ogg")
                         fade_out()
-                        if temp[0]=="App":
-                                game=TetrisApp(*temp[1:])
-                        elif temp[0]=="Timed":
-                                game=TetrisTimed(*temp[1:])
+                        game=temp[0](*temp[1:])
                         game.run()
                         if not game.rage:
                                 if saveFile!="Guest":
@@ -905,24 +910,23 @@ class TLevelSelect(TetrisMenu):
         def drawUI(self):
                 self.UI=pygame.Surface((10*config['cell_size'], 6*config['cell_size']))
                 draw_matrix([[13 for _ in range(10)] for _ in range(6)], (0, 0), self.UI)
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Level: "+str(self.selLevel), False, (0,0,0)), (3*config['cell_size'], 0.5*config['cell_size']))
+                draw_text("Level: "+str(self.selLevel), (3, 0.5), self.UI)
                 if len(self.heights)>1:
-                        self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render("Height: "+str(self.selHeight), False, (0,0,0)), (2.75*config['cell_size'], 1.5*config['cell_size']))
+                        draw_text("Height: "+str(self.selHeight), (2.75, 1.5), self.UI)
                 if self.action[0]=="App":
                         for x in range(len(highscores[0][self.selLevel])):
-                                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(highscores[0][self.selLevel][x][0]+": "+str(highscores[0][self.selLevel][x][1]), False, (0,0,0)), (0.5*config['cell_size'], (2.5+x)*config['cell_size']))
+                                draw_text(highscores[0][self.selLevel][x][0]+": "+str(highscores[0][self.selLevel][x][1]), (0.5, 2.5+x), self.UI)
                 elif len(self.heights)==1:
                         for x in range(len(highscores[1][self.selLevel])):
-                                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(highscores[1][self.selLevel][x][0]+": "+str(highscores[1][self.selLevel][x][1]), False, (0,0,0)), (0.5*config['cell_size'], (2.5+x)*config['cell_size']))
+                                draw_text(highscores[1][self.selLevel][x][0]+": "+str(highscores[1][self.selLevel][x][1]), (0.5, 2.5+x), self.UI)
                 else:
                         for x in range(len(highscores[2][self.selLevel][self.selHeight])):
-                                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(highscores[2][self.selLevel][self.selHeight][x][0]+": "+"{0}:{1:02}".format(highscores[2][self.selLevel][self.selHeight][x][1]//1800, highscores[2][self.selLevel][self.selHeight][x][1]//30 % 60), False, (0,0,0)), (0.5*config['cell_size'], (3+x)*config['cell_size']))
-                        return
+                                draw_text(highscores[2][self.selLevel][self.selHeight][x][0]+": "+"{0}:{1:02}".format(highscores[2][self.selLevel][self.selHeight][x][1]//1800, highscores[2][self.selLevel][self.selHeight][x][1]//30 % 60), (0.5, 3+x), self.UI)
 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
                 display.blit(self.UI, (5*config['cell_size'], 6*config['cell_size']))
-                display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.title, False, (0,0,0), (255,255,255)), ((10-len(self.title)/4)*config['cell_size'], 4*config['cell_size']))
+                draw_text(self.title, (10-len(self.title)/4, 4), display, bg=(255,255,255))
 
 class FileDeletedException(Exception):
         pass
@@ -981,12 +985,12 @@ class TTextInput(TetrisMenu):
                 display.blit(bgscroll, (bgoffset, bgoffset))
                 display.blit(self.UI, ((10-len(self.text)/4)*config['cell_size'], 9*config['cell_size']))
                 if self.title:
-                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.title, False, (0,0,0), (255,255,255)), ((10.5-len(self.title)/4)*config['cell_size'], 7*config['cell_size']))
+                        draw_text(self.title, (10.5-len(self.title)/4, 7), display, bg=(255, 255, 255))
 
         def drawUI(self):
                 self.UI=pygame.Surface(((len(self.text)+1)/2*config['cell_size'], 1.5*config['cell_size']))
                 self.UI.fill((255, 255, 255))
-                self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.text, False, (0,0,0)), (config['cell_size']/4, config['cell_size']/2))
+                draw_text(self.text, (0.25, 0.5), self.UI)
 
         def handle_key(self, key, unicode):
                 if key=="return" or key=="escape":
@@ -1046,7 +1050,7 @@ class TMessage(TetrisMenu):
                 self.UI=pygame.Surface((longest/2*config['cell_size'], (len(split)+1)*config['cell_size']))
                 self.UI.fill((255,255,255))
                 for x in range(len(split)):
-                        self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(split[x], False, (0,0,0)), ((longest/4-len(split[x])/4+0.25)*config['cell_size'], (0.5+x)*config['cell_size']))
+                        draw_text(split[x], (longest/4-len(split[x])/4+0.25, 0.5+x), self.UI)
 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
@@ -1161,8 +1165,6 @@ class ServerMenu(TetrisMenu):
                         raise ConnectionResetError
                 self.sock.send('nick '+saveFile)
                 print('', end='')
-                self.sock.send('chathistory')
-                self.chathistory=self.sock.receive()
                 self.sock.send('nicks')
                 self.users=self.sock.receive()
                 self.selected=[0,0]
@@ -1174,11 +1176,11 @@ class ServerMenu(TetrisMenu):
                 self.UI.set_colorkey(bg_colors[4])
                 draw_matrix([[13,13,13,13,13,0,13,13,13,13,13,0,13,13,13,13,13] for _ in range(15)], (0,0), self.UI)
                 for x in range(len(self.users[:15])):
-                        self.UI.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.users[x], False, bg_colors[5]), (config['cell_size'], (0.25+x)*config['cell_size']))
-                for x in range(len(self.users[16:30])):
-                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.users[x], False, bg_colors[5]), (7*config['cell_size'], (0.25+x)*config['cell_size']))
-                for x in range(len(self.users[31:45])):
-                        display.blit(pygame.font.Font("joystix.ttf", config['cell_size']//2+2).render(self.users[x], False, bg_colors[5]), (13*config['cell_size'], (0.25+x)*config['cell_size']))
+                        draw_text(self.users[x], (1, 0.25+x), self.UI)
+                for x in range(len(self.users[16:31])):
+                        draw_text(self.users[15+x], (7, 0.25+x), self.UI)
+                for x in range(len(self.users[31:46])):
+                        draw_text(self.users[30+x], (13, 0.25+x), self.UI)
                 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
@@ -1268,11 +1270,11 @@ if __name__=="__main__":
                 tiles.insert(x+3, pygame.transform.rotate(tiles[x], 90))
         tiles.insert(13, pygame.Surface((config['cell_size'],config['cell_size'])))
         tiles[13].fill((255,255,255))
-        #Uncomment this when new tiles are added
-        #tiles.insert(15, pygame.Surface((config['cell_size'],config['cell_size'])))
-        #tiles[15].fill((17, 83, 18))
-        #tiles.insert(16, pygame.Surface((config['cell_size'],config['cell_size'])))
-        #tiles[16].fill((135, 168, 123))
+        # Uncomment this when new tiles are added
+        # tiles.insert(15, pygame.Surface((config['cell_size'],config['cell_size'])))
+        # tiles[15].fill((17, 83, 18))
+        # tiles.insert(16, pygame.Surface((config['cell_size'],config['cell_size'])))
+        # tiles[16].fill((135, 168, 123))
         tiles.insert(17, pygame.Surface((config['cell_size'],config['cell_size'])))
         tiles[17].fill((193, 221, 243))
 
@@ -1300,9 +1302,9 @@ if __name__=="__main__":
         draw_matrix([[15+((x+y)%2) for x in range(21)] for y in range(18+config['cell_size'])], (0,0), bgscroll)
         bgoffset=0
         dont_burn_my_cpu = pygame.time.Clock()
-        MarathonLevel = TLevelSelect(("App", config['cell_size']*2, 0, "LVL"), title="Marathon")
-        UltraLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 5400), title="Time Attack")
-        LinesLevel = TLevelSelect(("Timed", config['cell_size']*2, 0, "LVL", 0, 40, "HIGH"), 9, (0, 2, 4, 6, 8, 10), "40 Lines")
+        MarathonLevel = TLevelSelect((TetrisApp, "LVL"), title="Marathon")
+        UltraLevel = TLevelSelect((TetrisTimed, "LVL", 5400), title="Time Attack")
+        LinesLevel = TLevelSelect((TetrisTimed, "LVL", 0, 40, "HIGH"), 9, (0, 2, 4, 6, 8, 10), "40 Lines")
         onePMode = TetrisMenu(["Marathon", "Time Attack", "40 Lines"], [MarathonLevel, UltraLevel, LinesLevel])
         menu = TetrisMenu(["1 Player", "2P Test", "Options", "Scorecard"], [onePMode, ServerMenu, TOptionsMenu(), TPlayerCard()], saveFile)
         if config['music']:
