@@ -917,7 +917,7 @@ class TLevelSelect(TetrisMenu):
                 draw_text("Level: "+str(self.selLevel), (3, 0.5), self.UI)
                 if len(self.heights)>1:
                         draw_text("Height: "+str(self.selHeight), (2.75, 1.5), self.UI)
-                if self.action[0]=="App":
+                if self.action[0]==TetrisApp:
                         for x in range(len(highscores[0][self.selLevel])):
                                 draw_text(highscores[0][self.selLevel][x][0]+": "+str(highscores[0][self.selLevel][x][1]), (0.5, 2.5+x), self.UI)
                 elif len(self.heights)==1:
@@ -1170,10 +1170,13 @@ class ServerMenu(TetrisMenu):
                 self.sock.send('nick '+saveFile)
                 self.sock.send('nicks')
                 self.users=self.sock.receive()
+                if type(self.users) is str:
+                        self.sock.receive()
+                        # Do something with this...
+                        self.quit=True
                 self.selected=[0,0]
 
         def drawUI(self):
-                # Should the player's own name be drawn?
                 self.UI=pygame.Surface((17*config['cell_size'], 15*config['cell_size']))
                 self.UI.fill(bg_colors[4])
                 self.UI.set_colorkey(bg_colors[4])
@@ -1199,7 +1202,17 @@ class ServerMenu(TetrisMenu):
                                 self.sock.send("challenge "+self.users[selected])
                                 play_sound("ok.ogg")
                                 fade_out()
-                                TMessage("Waiting for "+self.users[selected]+"...").run()
+                                length=6.75-len(self.users[selected])/4
+                                length*=config['cell_size']
+                                self.UI=pygame.Surface(((6.5+len(self.users[selected])/2)*config['cell_size'], 1.5*config['cell_size']))
+                                self.UI.fill((255,255,255))
+                                draw_text("Waiting for "+self.users[selected]+"...", (0.5, 0.5), self.UI)
+                                display.blit(bgscroll, (bgoffset, bgoffset))
+                                display.blit(self.UI, (length, 8*config['cell_size']))
+                                fade_in()
+                                time.sleep(2)
+                                fade_out()
+                                self.drawUI()
                                 fade_in()
                         else:
                                 play_sound("cancel.ogg")
