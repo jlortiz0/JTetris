@@ -1,5 +1,5 @@
 build/*
-tetris.spec
+*.spec
 dist/*
 __pycache__/*
 saves/*
