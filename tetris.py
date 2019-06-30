@@ -21,17 +21,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import pygame, os, time, random, sys, json, types, socket, select
+import pygame, os, time, random, sys, json, types, socket, select, math
 from statistics import mean
 from datetime import datetime
 
 # The configuration
 config = {
-        'cell_size':    32,
+        'cell_size':    40,
         'songs':        ("dxa1.ogg", "dxa2.ogg", "dxa3.ogg", "danger.ogg"),
-        'heights':      (19, 9, 6, 3),
-        'music':        True,
-        'sound':        True
+        'heights':      (19, 9, 6, 3)
 }
 
 bg_colors = [
@@ -68,23 +66,23 @@ tetris_shapes = [
 ]
 
 speeds = [
-        883,
-        817,
-        750,
-        683,
-        617,
-        550,
-        467,
-        367,
-        283,
-        183,
-        167,
-        150,
-        133,
-        117,
-        100, 100,
-        67, 67,
-        50
+        53,
+        49,
+        45,
+        41,
+        37,
+        33,
+        28,
+        22,
+        17,
+        11,
+        10,
+        9,
+        8,
+        7,
+        6, 6,
+        4, 4,
+        3
 ]
 
 def rotate_clockwise(shape, rot_center):
@@ -132,27 +130,29 @@ def draw_matrix(matrix, offset, screen):
                         for x, val in enumerate(row):
                                 if val:
                                         screen.blit(tiles[val],((off_x+x) * config['cell_size'],
-                                                        (off_y+y) * config['cell_size']))
+                                                                (off_y+y) * config['cell_size']))
 
 _sound_library={}
+_snd_vol=60
 def play_sound(path):
-        if not config['sound']:
-                return
         global _sound_library
         sound=_sound_library.get(path)
         if sound is None:
                 sound=pygame.mixer.Sound("sound"+os.sep+path)
                 _sound_library[path]=sound
+        sound.set_volume(_snd_vol/100)
         sound.play()
 
 _song=None
+_mus_vol=50
 def play_song(song):
         global _song
-        if not config['music'] or _song==song:
+        if _song==song:
                 return
         _song=song
         pygame.mixer.music.stop()
         pygame.mixer.music.load("music"+os.sep+song)
+        pygame.mixer.music.set_volume(_mus_vol/100)
         pygame.mixer.music.play(-1)
 
 def fade_out():
@@ -161,23 +161,23 @@ def fade_out():
         fadebg.blit(display, (0,0))
         fadeeffect = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
         fadeeffect.fill((255,255,255))
-        for x in range(0, 257, 32):
+        for x in range(0, 257, 16):
                 fadeeffect.set_alpha(min(x, 255))
                 display.blit(fadebg, (0,0))
                 display.blit(fadeeffect, (0,0))
                 pygame.display.flip()
-                dont_burn_my_cpu.tick(30)
+                dont_burn_my_cpu.tick(60)
 
 def fade_in():
         fadebg = display.copy()
         fadeeffect = pygame.Surface((config['cell_size']*20, config['cell_size']*18))
         fadeeffect.fill((255,255,255))
-        for x in range(265, 0, -24):
+        for x in range(256, -1, -16):
                 fadeeffect.set_alpha(min(x, 255))
                 display.blit(fadebg, (0,0))
                 display.blit(fadeeffect, (0,0))
                 pygame.display.flip()
-                dont_burn_my_cpu.tick(30)
+                dont_burn_my_cpu.tick(60)
         pygame.time.set_timer(pygame.USEREVENT+3, 100)
         pygame.event.clear(pygame.KEYDOWN)
 
@@ -185,8 +185,13 @@ _font=None
 def draw_text(text, pos, surf, color=bg_colors[5], bg=None):
         global _font
         if not _font:
-                _font=pygame.font.Font("joystix.ttf", config['cell_size']//2+2)
+                _font=pygame.font.Font("joystix.ttf", config['cell_size']//2+4)
         surf.blit(_font.render(text, False, color, bg), [config['cell_size']*x for x in pos])
+
+def screenshot():
+        now = datetime.now()
+        pygame.image.save(display, "screenshot"+os.sep+"{}-{:02}-{:02}_{:02}-{:02}-{:02}.png".format(now.year, now.month, now.day, now.hour, now.minute, now.second))
+        play_sound("screenshot.ogg")
 
 class TetrisClass:
         def draw(self):
@@ -208,12 +213,12 @@ class TetrisApp(TetrisClass):
                 self.screen = display.subsurface(pygame.Rect(2*config['cell_size'], 0, self.width, self.height))
                 self.board = new_board()
                 self.next_stone=[random.choice(tetris_shapes), random.choice(tetris_shapes)]
+                self.level=level
+                self.speed=speeds[self.level]
                 self.new_stone()
                 self.lines=0
-                self.level=level
                 self.bgcolor=bg_colors[self.level//5]
                 self.score=0
-                self.speed=speeds[self.level]
         
         def new_stone(self):
                 self.stone=self.next_stone.pop(0)
@@ -223,8 +228,7 @@ class TetrisApp(TetrisClass):
                 self.stone_x = int(10 / 2 - len(self.stone[0])/2)
                 self.stone_y = 1
                 self.rot_center=[0,1,1,1]
-                self.dropdelay = True
-                pygame.time.set_timer(pygame.USEREVENT+2, 250)
+                self.dropdelay = 15 + self.speed
                 if self.stone==tetris_shapes[5]:
                         self.rot_center[2]=0
                 if check_collision(self.board, self.stone, (self.stone_x, self.stone_y)):
@@ -238,8 +242,7 @@ class TetrisApp(TetrisClass):
                                         draw_matrix(self.board, (0,-1), self.screen)
                                 pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                 time.sleep(0.4)
-                        if config['music']:
-                                pygame.mixer.music.stop()
+                        pygame.mixer.music.stop()
                         play_sound("gameover.ogg")
                         for x in range(17, -1, -1):
                                 draw_matrix([[4 for _ in range(10)]], (0, x), self.screen)
@@ -258,11 +261,10 @@ class TetrisApp(TetrisClass):
                 self.level+=1
                 if self.level<len(speeds):
                         self.speed=speeds[self.level]
-                        pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
                 if (self.level % 5)==0 and self.level/5<len(bg_colors)+1:
                         self.fade=[0, self.bgcolor, bg_colors[self.level//5]]
-                draw_matrix([[13, 13, 13, 13]], (4, 11), self.UI)
-                draw_text(str(self.level), (4.3, 11.1), self.UI)
+                draw_matrix([[13, 13, 13]], (4, 11), self.UI)
+                draw_text(":"+str(self.level), (3.8, 11.1), self.UI)
         
         def center_msg(self, msg):
                 for i, line in enumerate(msg.splitlines()):
@@ -286,7 +288,7 @@ class TetrisApp(TetrisClass):
                                 self.stone_x = new_x
         
         def drop(self, si=False):
-                if not (self.quit or self.paused or self.dropdelay):
+                if (not (self.quit or self.paused)) and self.dropdelay < self.speed:
                         self.stone_y += 1
                         if si:
                                 self.score+=1
@@ -300,7 +302,7 @@ class TetrisApp(TetrisClass):
                                 play_sound("drop.ogg")
                                 rows=[]
                                 for i in range(len(self.board)):
-                                        if 0 not in self.board[i] and 14 not in self.board[i]:
+                                        if all(self.board[i]) and 14 not in self.board[i]:
                                                 rows.append(i)
                                 if len(rows)>0:
                                         self.lines+=len(rows)
@@ -313,7 +315,7 @@ class TetrisApp(TetrisClass):
                                 if self.quit:
                                         return
                                 for x in range(len(self.board)):
-                                        if self.board[x]!=[0 for x in range(10)]:
+                                        if any(self.board[x]):
                                                 height=x
                                                 break
                                 for x in range(len(config['heights'])-1, -1, -1):
@@ -327,7 +329,7 @@ class TetrisApp(TetrisClass):
                 self.stone=[]
                 self.lineNums[len(rows)-1]+=1
                 draw_matrix([[13, 13, 13, 13]], (4, 13), self.UI)
-                draw_text(str(self.lines), (4.3, 13.1), self.UI)
+                draw_text(":"+str(self.lines), (3.8, 13.1), self.UI)
                 if len(rows)>3:
                         play_sound("4lines.ogg")
                         self.score+=(self.level+1)*1200
@@ -347,7 +349,7 @@ class TetrisApp(TetrisClass):
                                 if (x//4 % 2) == 0:
                                         draw_matrix([[13 for i in range(10)]], (0, r-1), self.screen)
                         pygame.display.flip()
-                        time.sleep(0.05)
+                        dont_burn_my_cpu.tick(20)
                 for r in rows:
                         del self.board[r]
                         self.board = [[0 for i in range(10)]] + self.board
@@ -395,6 +397,10 @@ class TetrisApp(TetrisClass):
                                 self.stone_x+=self.rot_center[1]-center[1]
                                 self.stone_y+=self.rot_center[0]-center[0]
                                 self.rot_center = center
+                                if check_collision(self.board,
+                                           self.stone,
+                                           (self.stone_x, self.stone_y+1)):
+                                        self.dropdelay = self.speed
                                 play_sound("rotate.ogg")
                         elif not check_collision(self.board,
                                                new_stone,
@@ -403,6 +409,10 @@ class TetrisApp(TetrisClass):
                                 self.stone_x+=self.rot_center[3]-center[3]
                                 self.stone_y+=self.rot_center[2]-center[2]
                                 self.rot_center = center
+                                if check_collision(self.board,
+                                           self.stone,
+                                           (self.stone_x, self.stone_y+1)):
+                                        self.dropdelay = self.speed
                                 play_sound("rotate.ogg")
         
         def toggle_pause(self):
@@ -411,8 +421,6 @@ class TetrisApp(TetrisClass):
                 pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                 self.paused = not self.paused
                 play_sound("pause.ogg")
-                if not config['music']:
-                        return
                 if self.paused:
                         pygame.mixer.music.pause()
                 else:
@@ -429,11 +437,11 @@ class TetrisApp(TetrisClass):
                 self.UI.set_colorkey((128,128,128))
                 draw_matrix([[14] for _ in range(18)], (0, 0), self.UI)
                 draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (2, 2), self.UI)
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 9), self.UI)
+                draw_matrix([[15, 13, 13, 13, 13, 13, 13]], (1, 9), self.UI)
                 draw_text("Score:", (1.3, 9.1), self.UI)
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 11), self.UI)
+                draw_matrix([[15, 13, 13, 13, 13, 13, 13]], (1, 11), self.UI)
                 draw_text("Level:", (1.3, 11.1), self.UI)
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 13), self.UI)
+                draw_matrix([[15, 13, 13, 13, 13, 13, 13]], (1, 13), self.UI)
                 draw_text("Lines:", (1.3, 13.1), self.UI)
                 draw_text(str(self.level), (4.3, 11.1), self.UI)
                 draw_text("0", (4.3, 13.1), self.UI)
@@ -448,60 +456,60 @@ class TetrisApp(TetrisClass):
                 draw_matrix([[14] for _ in range(18)], (1,0), display)
                 self.screen.fill(self.bgcolor)
                 draw_matrix(self.board, (0,-1), self.screen)
-                draw_matrix(self.stone,(self.stone_x, self.stone_y-0.925), self.screen)
+                draw_matrix(self.stone,(self.stone_x, self.stone_y-1.1), self.screen)
         
         def run(self):
                 global bgoffset
                 key_actions = {
-                        'left':         lambda:self.move(-1),
-                        'right':        lambda:self.move(+1),
-                        'down':         lambda:self.drop(True),
-                        'z':            lambda:self.rotate_stone(-1),
-                        'x':            lambda:self.rotate_stone(+1),
-                        'return':       self.toggle_pause,
-                        'space':        self.exit
+                        pygame.K_LEFT:  lambda:self.move(-1),
+                        pygame.K_RIGHT: lambda:self.move(+1),
+                        pygame.K_DOWN:  lambda:self.drop(True),
+                        pygame.K_z:     lambda:self.rotate_stone(-1),
+                        pygame.K_x:     lambda:self.rotate_stone(+1),
+                        pygame.K_RETURN:self.toggle_pause,
+                        pygame.K_ESCAPE:self.exit,
+                        pygame.K_F12:   screenshot,
+                        pygame.K_l:     self.level_up
                 }
 
                 self.paused = False
                 self.fade=()
+                debounce = dict.fromkeys(key_actions, False)
                 
                 self.drawUI()
                 self.draw()
                 play_song("dxa1.ogg")
                 fade_in()
-                pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
                 while not self.quit:
                         if not self.paused:
                                 self.draw()
                                 pygame.display.flip()
+                                if self.fade:
+                                        self.fade[0]=self.fade[0]+1
+                                        self.bgcolor=[x + (((y-x)/30)*self.fade[0]) for x,y in zip(self.fade[1], self.fade[2])]
+                                        if self.fade[0]==30:
+                                                self.bgcolor=self.fade[2]
+                                                self.fade=()
+                                if self.dropdelay:
+                                        self.dropdelay -= 1
+                                else:
+                                        self.drop()
+                                        self.dropdelay = self.speed
                         
                         for event in pygame.event.get():
-                                if event.type == pygame.USEREVENT+1:
-                                        self.drop()
-                                elif event.type == pygame.USEREVENT+2:
-                                        self.dropdelay=False
-                                        pygame.time.set_timer(pygame.USEREVENT+2, 0)
-                                elif event.type == pygame.USEREVENT+3:
+                                if event.type == pygame.USEREVENT+3:
                                         bgoffset = (bgoffset-1) % -config['cell_size']
                                 elif event.type == pygame.QUIT:
                                         self.quit=True
-                                elif event.type == pygame.KEYDOWN:
-                                        if event.key==pygame.K_F12:
-                                                now = datetime.now()
-                                                pygame.image.save(display, "screenshot"+os.sep+"{}-{:02}-{:02}_{:02}-{:02}-{:02}.png".format(now.year, now.month, now.day, now.hour, now.minute, now.second))
-                                                play_sound("screenshot.ogg")
-                                        elif pygame.key.name(event.key) in key_actions:
-                                                key_actions[pygame.key.name(event.key)]()
+                                elif event.type == pygame.KEYDOWN and event.key in key_actions and not debounce[event.key]:
+                                        if not (273 < event.key < 277):
+                                                debounce[event.key] = True
+                                        key_actions[event.key]()
+                                elif event.type == pygame.KEYUP and event.key in key_actions:
+                                        debounce[event.key] = False
                                         
-                        if len(self.fade)>0:
-                                self.fade[0]=self.fade[0]+1
-                                self.bgcolor=[x + (((y-x)/15)*self.fade[0]) for x,y in zip(self.fade[1], self.fade[2])]
-                                if self.fade[0]==15:
-                                        self.bgcolor=self.fade[2]
-                                        self.fade=()
-                        dont_burn_my_cpu.tick(30)
+                        dont_burn_my_cpu.tick(60)
                 fade_out()
-                pygame.time.set_timer(pygame.USEREVENT+1, 0)
 
 class TetrisTimed(TetrisApp):
         def __init__(self, level=0, time=0, lines=0, height=0):
@@ -523,8 +531,7 @@ class TetrisTimed(TetrisApp):
                         self.draw()
                         pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                         time.sleep(1)
-                        if config['music']:
-                                pygame.mixer.music.stop()
+                        pygame.mixer.music.stop()
                         play_sound("gameover.ogg")
                         for x in range(17, -1, -1):
                                 draw_matrix([[1 for _ in range(10)]], (0, x), self.screen)
@@ -546,11 +553,11 @@ class TetrisTimed(TetrisApp):
                 self.UI.set_colorkey((128,128,128))
                 draw_matrix([[14] for _ in range(18)], (0, 0), self.UI)
                 draw_matrix([[13, 13, 13, 13, 13] for _ in range(5)], (2, 2), self.UI)
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 9), self.UI)
+                draw_matrix([[15, 13, 13, 13, 13, 13, 13]], (1, 9), self.UI)
                 draw_text("Score:", (1.3, 9.1), self.UI)
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 11), self.UI)
+                draw_matrix([[15, 13, 13, 13, 13, 13, 13]], (1, 11), self.UI)
                 draw_text("Time:", (1.3, 11.1), self.UI)
-                draw_matrix([[17, 13, 13, 13, 13, 13, 13]], (1, 13), self.UI)
+                draw_matrix([[15, 13, 13, 13, 13, 13, 13]], (1, 13), self.UI)
                 draw_text("Lines:", (1.3, 13.1), self.UI)
                 draw_text("0", (4.3, 13.1), self.UI)
 
@@ -564,7 +571,7 @@ class TetrisTimed(TetrisApp):
                 if self.score>9999999:
                         self.score=9999999
                 draw_text(str(self.score), (16.3, 9.1), display)
-                draw_text("{0}:{1:02}".format(self.timer//1800, self.timer//30 % 60), (15.7, 11.1), display)
+                draw_text("{0}:{1:02}".format(self.timer//3600, self.timer//60 % 60), (15.7, 11.1), display)
                 draw_matrix([[14] for _ in range(18)], (1,0), display)
                 self.screen.fill(self.bgcolor)
                 draw_matrix(self.board, (0,-1), self.screen)
@@ -573,44 +580,39 @@ class TetrisTimed(TetrisApp):
         def run(self):
                 global bgoffset
                 key_actions = {
-                        'left':         lambda:self.move(-1),
-                        'right':        lambda:self.move(+1),
-                        'down':         lambda:self.drop(True),
-                        'z':            lambda:self.rotate_stone(-1),
-                        'x':            lambda:self.rotate_stone(+1),
-                        'return':       self.toggle_pause,
-                        'space':        self.exit
+                        pygame.K_LEFT:  lambda:self.move(-1),
+                        pygame.K_RIGHT: lambda:self.move(+1),
+                        pygame.K_DOWN:  lambda:self.drop(True),
+                        pygame.K_z:     lambda:self.rotate_stone(-1),
+                        pygame.K_x:     lambda:self.rotate_stone(+1),
+                        pygame.K_RETURN:self.toggle_pause,
+                        pygame.K_ESCAPE:self.exit,
+                        pygame.K_F12:   screenshot
                 }
-
+                
                 self.paused = False
+                debounce = dict.fromkeys(key_actions, False)
 
                 self.drawUI()
                 self.draw()
                 play_song("dxa1.ogg")
                 fade_in()
-                pygame.time.set_timer(pygame.USEREVENT+1, self.speed)
                 while not self.quit:
                         if not self.paused:
                                 self.draw()
                                 pygame.display.flip()
                         
                         for event in pygame.event.get():
-                                if event.type == pygame.USEREVENT+1:
-                                        self.drop()
-                                elif event.type == pygame.USEREVENT+2:
-                                        self.dropdelay=False
-                                        pygame.time.set_timer(pygame.USEREVENT+2, 0)
-                                elif event.type == pygame.USEREVENT+3:
+                                if event.type == pygame.USEREVENT+3:
                                         bgoffset = (bgoffset-1) % -config['cell_size']
                                 elif event.type == pygame.QUIT:
                                         self.quit=True
-                                elif event.type == pygame.KEYDOWN:
-                                        if event.key==pygame.K_F12:
-                                                now = datetime.now()
-                                                pygame.image.save(display, "screenshot"+os.sep+"{}-{:02}-{:02}_{:02}-{:02}-{:02}.png".format(now.year, now.month, now.day, now.hour, now.minute, now.second))
-                                                play_sound("screenshot.ogg")
-                                        elif pygame.key.name(event.key) in key_actions:
-                                                key_actions[pygame.key.name(event.key)]()
+                                elif event.type == pygame.KEYDOWN and event.key in key_actions and not debounce[event.key]:
+                                        if not (273 < event.key < 277):
+                                                debounce[event.key] = True
+                                        key_actions[event.key]()
+                                elif event.type == pygame.KEYUP and event.key in key_actions:
+                                        debounce[event.key] = False
                                         
                         if self.count and not self.paused:
                                 self.timer-=1
@@ -623,8 +625,7 @@ class TetrisTimed(TetrisApp):
                                         self.draw()
                                         pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                         time.sleep(1)
-                                        if config['music']:
-                                                pygame.mixer.music.stop()
+                                        pygame.mixer.music.stop()
                                         play_sound("gameover.ogg")
                                         for x in range(17, -1, -1):
                                                 draw_matrix([[1 for _ in range(10)]], (0, x), self.screen)
@@ -636,16 +637,20 @@ class TetrisTimed(TetrisApp):
                                         pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                         time.sleep(2)
                                         self.quit=True
-                                elif self.timer<301 and self.timer%30 == 0:
+                                elif self.timer<601 and self.timer%60 == 0:
                                         play_sound("countdown.ogg")
                                         
                         elif not self.paused:
                                 self.timer+=1
                         if not (self.quit or self.paused) and (self.timer%1800 == 0 or (self.count and self.timer==900)):
                                 play_sound("minute.ogg")
-                        dont_burn_my_cpu.tick(30)
+                        if self.dropdelay:
+                                self.dropdelay -= 1
+                        else:
+                                self.drop()
+                                self.dropdelay = self.speed
+                        dont_burn_my_cpu.tick(60)
                 fade_out()
-                pygame.time.set_timer(pygame.USEREVENT+1, 0)
 
 class ClientSocket(object):
         def __init__(self, sock=None, port=None):
@@ -663,16 +668,19 @@ class ClientSocket(object):
                 self.sock.connect((host, port))
 
         def close(self):
-                self.send("quit")
-                self.sock.shutdown(1)
-                self.sock.close()
+                try:
+                        self.send("quit")
+                        self.sock.shutdown(1)
+                        self.sock.close()
+                except ConnectionError:
+                        pass
 
         def readable(self):
                 return bool(select.select([self.sock], [], [], 0)[0])
 
         def send(self, data):
                 data = json.dumps(data).encode()
-                if len(data)>65535:
+                if len(data)>16777215:
                         raise ValueError
                 size=int.to_bytes(len(data), 3, 'big')
                 totalsent = 0
@@ -682,7 +690,7 @@ class ClientSocket(object):
                                 raise BrokenPipeError
                         totalsent+=sent
                 totalsent = 0
-                size=len(data)
+                size = len(data)
                 while totalsent<size:
                         sent=self.sock.send(data[totalsent:])
                         if not sent:
@@ -724,7 +732,7 @@ class TetrisMenu(TetrisClass):
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
                 display.blit(self.UI, (self.length, (9-len(self.menu)/2)*config['cell_size']))
-                draw_matrix([[17]], (self.length/config['cell_size'], self.selected+9-len(self.menu)/2) , display)
+                draw_matrix([[15]], (self.length/config['cell_size'], self.selected+9-len(self.menu)/2) , display)
                 if self.title:
                         draw_text(self.title, (10.5-len(self.title)/4, 7-len(self.menu)/2), display, bg=(255, 255, 255))
 
@@ -775,7 +783,7 @@ class TetrisMenu(TetrisClass):
                 self.UI=pygame.Surface(((longest//2+2)*config['cell_size'], len(self.menu)*config['cell_size']))
                 for x in range(len(self.menu)):
                         draw_matrix([[13 for _ in range(longest//2+2)]], (0, x), self.UI)
-                        draw_text(self.menu[x], (1.5, x), self.UI)
+                        draw_text(self.menu[x], (1.3, x), self.UI)
                         
         def run(self):
                 global bgoffset
@@ -795,16 +803,14 @@ class TetrisMenu(TetrisClass):
                                         sys.exit()
                                 elif event.type == pygame.KEYDOWN:
                                         if event.key==pygame.K_F12:
-                                                now = datetime.now()
-                                                pygame.image.save(display, "screenshot"+os.sep+"{}-{:02}-{:02}_{:02}-{:02}-{:02}.png".format(now.year, now.month, now.day, now.hour, now.minute, now.second))
-                                                play_sound("screenshot.ogg")
+                                                screenshot()
                                         else:
                                                 self.handle_key(pygame.key.name(event.key))
                                 elif event.type == pygame.USEREVENT+4:
                                         play_song("menu.ogg")
                                         pygame.mixer.music.set_endevent()
 
-                        dont_burn_my_cpu.tick(30)
+                        dont_burn_my_cpu.tick(60)
                 play_sound("cancel.ogg")
                 self.quit=False
                 self.selected=0
@@ -925,7 +931,7 @@ class TLevelSelect(TetrisMenu):
                                 draw_text(highscores[1][self.selLevel][x][0]+": "+str(highscores[1][self.selLevel][x][1]), (0.5, 2.5+x), self.UI)
                 else:
                         for x in range(len(highscores[2][self.selLevel][self.selHeight])):
-                                draw_text(highscores[2][self.selLevel][self.selHeight][x][0]+": "+"{0}:{1:02}".format(highscores[2][self.selLevel][self.selHeight][x][1]//1800, highscores[2][self.selLevel][self.selHeight][x][1]//30 % 60), (0.5, 3+x), self.UI)
+                                draw_text(highscores[2][self.selLevel][self.selHeight][x][0]+": "+"{0}:{1:02}".format(highscores[2][self.selLevel][self.selHeight][x][1]//1800, highscores[2][self.selLevel][self.selHeight][x][1]//60 % 60), (0.5, 3+x), self.UI)
 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
@@ -942,22 +948,30 @@ class TFileSelect(TetrisMenu):
                 super().__init__(files + ["New File...", "Guest"], action, "File Select")
 
         def handle_key(self, key):
-                global bgoffset
+                global _mus_vol, _snd_vol
                 if key=='return' or key=='z':
                         play_sound("ok.ogg")
                         if self.selected+2==len(self.menu):
                                 fade_out()
-                                name=TTextInput("Name Entry").run()[:10].strip()
-                                if name and not (name=="Guest" or os.path.exists("saves"+os.sep+name)):
-                                        with open("saves"+os.sep+name, 'w') as f:
-                                                json.dump([[],[],[],0,0,0,0], f)
-                                        self.menu.insert(-2, name)
-                                        self.drawUI()
+                                name=TTextInput("Name Entry").run()
+                                if name:
+                                        name=name[:10].strip()
+                                        if not (name=="Guest" or os.path.exists("saves"+os.sep+name)):
+                                                with open("saves"+os.sep+name, 'w') as f:
+                                                        json.dump([[],[],[],0,0,0,0,_mus_vol,_snd_vol], f)
+                                                self.menu.insert(-2, name)
+                                                self.drawUI()
                                 self.draw()
                                 fade_in()
                         else:
                                 global saveFile
                                 saveFile = self.menu[self.selected]
+                                if saveFile != "Guest":
+                                        with open("saves"+os.sep+saveFile) as f:
+                                                saveData = json.load(f)
+                                        _mus_vol=saveData[7]
+                                        pygame.mixer.music.set_volume(_mus_vol/100)
+                                        _snd_vol=saveData[8]
                                 fade_out()
                                 self.actions.title=saveFile
                                 try:
@@ -987,7 +1001,7 @@ class TTextInput(TetrisMenu):
 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
-                display.blit(self.UI, ((10-len(self.text)/4)*config['cell_size'], 9*config['cell_size']))
+                display.blit(self.UI, ((10.25-len(self.text)/4)*config['cell_size'], 9*config['cell_size']))
                 if self.title:
                         draw_text(self.title, (10.5-len(self.title)/4, 7), display, bg=(255, 255, 255))
 
@@ -1030,7 +1044,7 @@ class TTextInput(TetrisMenu):
                                         play_song("menu.ogg")
                                         pygame.mixer.music.set_endevent()
 
-                        dont_burn_my_cpu.tick(30)
+                        dont_burn_my_cpu.tick(60)
                 play_sound("cancel.ogg")
                 fade_out()
                 return self.text
@@ -1051,7 +1065,7 @@ class TMessage(TetrisMenu):
                                 longest=len(x)
                 self.length=10-longest/4
                 self.length*=config['cell_size']
-                self.UI=pygame.Surface((longest/2*config['cell_size'], (len(split)+1)*config['cell_size']))
+                self.UI=pygame.Surface(((longest+1)/2*config['cell_size'], (len(split)+1)*config['cell_size']))
                 self.UI.fill((255,255,255))
                 for x in range(len(split)):
                         draw_text(split[x], (longest/4-len(split[x])/4+0.25, 0.5+x), self.UI)
@@ -1081,9 +1095,9 @@ class TPlayerCard(TMessage):
                         return
                 with open("saves"+os.sep+saveFile) as f:
                         saveData = json.load(f)
-                totalLines = sum(saveData[3:])
+                totalLines = sum(saveData[3:7])
                 if totalLines==0:
-                        TMessage("Not enough data!\nYour stats will\nappear here after\nyou play for a bit.").run()
+                        TMessage("Your stats will\nappear here after\nyou play a game.").run()
                         return
                 if not saveData[0]:
                         saveData[0]=[0]
@@ -1102,15 +1116,6 @@ class TPlayerCard(TMessage):
 
 class TOptionsMenu(TetrisMenu):
         def __init__(self):
-                def toggle_cfg(option):
-                        config[option]=not config[option]
-                        if option=="music":
-                                if config[option]:
-                                        pygame.mixer.init()
-                                        play_song("menu.ogg")
-                                else:
-                                        pygame.mixer.music.fadeout(1000)
-                        
                 def erase_highscores():
                         global highscores
                         if not TMessage("Ok to delete\nhighscore data?\nZ-Yes X-No").run():
@@ -1127,15 +1132,66 @@ class TOptionsMenu(TetrisMenu):
                                 return
                         os.remove("saves"+os.sep+saveFile)
                         saveFile="Guest"
-                        TMessage("Save deleted\nReturning to\nfile select...").run()
+                        TMessage("Save deleted\nReturning to title").run()
                         raise FileDeletedException()
-                super().__init__(["Toggle Music", "Toggle Sound", "Erase Highscores", "Erase My File"], [lambda:toggle_cfg("music"), lambda:toggle_cfg("sound"), erase_highscores, erase_my_file], "Options")
+                super().__init__(["Music Volume: ", "Sound Volume: ", "Erase Highscores", "Erase My File"], ["MUS", "SND", erase_highscores, erase_my_file], "Options")
+
+        def handle_key(self, key):
+                global bgoffset, _mus_vol, _snd_vol
+                if key=='return' or key=='z':
+                        if isinstance(self.actions[self.selected], types.FunctionType):
+                                play_sound("ok.ogg")
+                                fade_out()
+                                self.actions[self.selected]()
+                                self.draw()
+                                fade_in()
+                        else:
+                                play_sound("cancel.ogg")
+                elif key=='escape' or key=='x':
+                        self.quit=True
+                elif key=='down':
+                        play_sound("select.ogg")
+                        self.selected = (self.selected+1) % len(self.menu)
+                elif key=='up':
+                        play_sound("select.ogg")
+                        self.selected-=1
+                        if self.selected<0:
+                                self.selected=len(self.menu)-1
+                elif key=='left' and isinstance(self.actions[self.selected], str):
+                        if self.selected==0 and _mus_vol:
+                                _mus_vol-=1
+                                pygame.mixer.music.set_volume(_mus_vol/100)
+                                self.drawUI()
+                        elif _snd_vol:
+                                _snd_vol-=1
+                                self.drawUI()
+                elif key=='right' and isinstance(self.actions[self.selected], str):
+                        if self.selected==0 and _mus_vol<100:
+                                _mus_vol+=1
+                                pygame.mixer.music.set_volume(_mus_vol/100)
+                                self.drawUI()
+                        elif _snd_vol<100:
+                                _snd_vol+=1
+                                self.drawUI()
+
+        def drawUI(self):
+                temp = self.menu[:2]
+                self.menu[0]=self.menu[0]+str(_mus_vol)
+                self.menu[1]=self.menu[1]+str(_snd_vol)
+                super().drawUI()
+                self.menu = temp + self.menu[2:]
 
         def run(self):
                 if saveFile=="Guest":
                         TMessage("Guests cannot\nchange settings").run()
                         return
                 super().run()
+                with open("saves"+os.sep+saveFile) as f:
+                        saveData = json.load(f)
+                saveData[7] = _mus_vol
+                saveData[8] = _snd_vol
+                with open("saves"+os.sep+saveFile, 'w') as f:
+                        json.dump(saveData, f)
 
 class ServerMenu(TetrisMenu):
         def __init__(self, sock=None):
@@ -1147,75 +1203,89 @@ class ServerMenu(TetrisMenu):
                         if ':' in sock:
                                 port=int(sock.split(':')[1])
                                 sock=sock.split(':')[0]
-                        try:
-                                self.sock=ClientSocket(sock, port)
-                        except ConnectionError:
-                                self.quit=True
-                                TMessage("There was an error\nconnecting to\n"+sock).run()
-                                return
+                        self.sock=ClientSocket(sock, port)
                 else:
-                        self.__init__(TTextInput("Server IP:", "127.0.0.1").run())
+                        try:
+                                ip = TTextInput("Server IP:", "127.0.0.1").run()
+                                if ip:
+                                        self.__init__(ip)
+                                else:
+                                        self.quit = True
+                        except ConnectionError as e:
+                                self.quit=True
+                                TMessage("There was an\nerror connecting").run()
                         return
                 self.sock.send('isJTetris')
-                time.sleep(0.5)
+                time.sleep(1)
                 if self.sock.readable():
                         if self.sock.receive()!="yes":
                                 self.sock.sock.shutdown(1)
                                 self.sock.sock.close()
-                                raise ConnectionResetError
+                                raise ConnectionAbortedError
                 else:
                         self.sock.sock.shutdown(1)
                         self.sock.sock.close()
-                        raise ConnectionResetError
+                        raise ConnectionRefusedError
                 self.sock.send('nick '+saveFile)
                 self.sock.send('nicks')
-                self.users=self.sock.receive()
+                self.users = self.sock.receive()
                 if type(self.users) is str:
                         self.sock.receive()
-                        # Do something with this...
+                        # Handle this better
+                        TMessage("You are already\non the server!").run()
                         self.quit=True
                 self.selected=[0,0]
+                self.status = "Welcome!"
 
         def drawUI(self):
-                self.UI=pygame.Surface((17*config['cell_size'], 15*config['cell_size']))
+                self.UI=pygame.Surface((17*config['cell_size'], 16*config['cell_size']))
                 self.UI.fill(bg_colors[4])
                 self.UI.set_colorkey(bg_colors[4])
-                draw_matrix([[13,13,13,13,13,0,13,13,13,13,13,0,13,13,13,13,13] for _ in range(15)], (0,0), self.UI)
-                for x in range(len(self.users[:15])):
+                draw_matrix([[13,13,13,13,13,0,13,13,13,13,13,0,13,13,13,13,13] for _ in range(14)], (0,0), self.UI)
+                draw_matrix([[13 for _ in range(17)]], (0,15), self.UI)
+                for x in range(len(self.users[:14])):
                         draw_text(self.users[x], (1, 0.25+x), self.UI)
-                for x in range(len(self.users[16:31])):
-                        draw_text(self.users[15+x], (7, 0.25+x), self.UI)
-                for x in range(len(self.users[31:46])):
-                        draw_text(self.users[30+x], (13, 0.25+x), self.UI)
+                for x in range(len(self.users[15:29])):
+                        draw_text(self.users[14+x], (7, 0.25+x), self.UI)
+                for x in range(len(self.users[29:43])):
+                        draw_text(self.users[28+x], (13, 0.25+x), self.UI)
                 
         def draw(self):
                 display.blit(bgscroll, (bgoffset, bgoffset))
-                display.blit(self.UI, (1.5*config['cell_size'], 1.5*config['cell_size']))
-                draw_matrix([[17]], (1.5+self.selected[0]*6, 1.5+self.selected[1]), display)
+                display.blit(self.UI, (1.5*config['cell_size'], config['cell_size']))
+                draw_matrix([[15]], (1.5+self.selected[0]*6, 1+self.selected[1]), display)
+                draw_text(self.status, (10-len(self.status)/4, 16), display)
 
         def handle_key(self, key):
                 if key=="escape":
                         self.quit=True
                 elif key=="return":
                         selected=self.selected[1]+self.selected[0]*15
-                        if len(self.users)>selected and self.users[selected]!=saveFile:
-                                self.sock.send("challenge "+self.users[selected])
-                                play_sound("ok.ogg")
-                                fade_out()
-                                length=6.75-len(self.users[selected])/4
-                                length*=config['cell_size']
-                                self.UI=pygame.Surface(((6.5+len(self.users[selected])/2)*config['cell_size'], 1.5*config['cell_size']))
-                                self.UI.fill((255,255,255))
-                                draw_text("Waiting for "+self.users[selected]+"...", (0.5, 0.5), self.UI)
-                                display.blit(bgscroll, (bgoffset, bgoffset))
-                                display.blit(self.UI, (length, 8*config['cell_size']))
-                                fade_in()
-                                time.sleep(2)
-                                fade_out()
-                                self.drawUI()
-                                fade_in()
-                        else:
+                        if len(self.users)<=selected:
+                                self.status="That's a blank space"
                                 play_sound("cancel.ogg")
+                        elif self.users[selected]==saveFile:
+                                self.status="Cannot challenge yourself!"
+                                play_sound("cancel.ogg")
+                        else:
+                                self.status = ""
+                                self.sock.send("challenge "+self.users[selected])
+                                data = self.sock.receive()
+                                if data=="busy":
+                                        self.status=self.users[selected]+" is busy"
+                                        play_sound("cancel.ogg")
+                                elif data=="BadNick":
+                                        self.status="Just missed 'em! "+self.users[selected]+" left"
+                                        play_sound("cancel.ogg")
+                                else:
+                                        fade_out()
+                                        result = ChallengeMessage(self.sock, False, self.users[selected]).run()
+                                        if isinstance(result, ConnectionError):
+                                                self.quit=True
+                                        elif result and isinstance(result, bool):
+                                                P2Mngr(self.sock, self.users[selected]).run()
+                                                pass
+                                        fade_in()
                 elif key=="left":
                         self.selected[0]-=1
                         self.selected[0]%=3
@@ -1226,20 +1296,19 @@ class ServerMenu(TetrisMenu):
                         play_sound("select.ogg")
                 elif key=="down":
                         self.selected[1]+=1
-                        self.selected[1]%=15
+                        self.selected[1]%=14
                         play_sound("select.ogg")
                 elif key=="up":
                         self.selected[1]-=1
-                        self.selected[1]%=15
+                        self.selected[1]%=14
                         play_sound("select.ogg")
 
         def run(self):
                 if self.quit:
                         return
                 global bgoffset
-                if config['music']:
-                        pygame.mixer.music.set_endevent()
-                        pygame.mixer.music.fadeout(1000)
+                pygame.mixer.music.set_endevent()
+                pygame.mixer.music.fadeout(1000)
                 self.drawUI()
                 self.draw()
                 fade_in()
@@ -1247,26 +1316,48 @@ class ServerMenu(TetrisMenu):
                         self.draw()
                         pygame.display.flip()
                         if self.sock.readable():
-                                msg=self.sock.receive()
+                                try:
+                                        msg=self.sock.receive()
+                                except ConnectionError:
+                                        TMessage("The connection\nwas interrupted").run()
+                                        break
                                 print(msg)
                                 if msg[:5]=='join ':
                                         msg=msg.split(' ')
                                         if msg[2]=='None' or not msg[2] in self.users:
                                                 self.users.append(msg[1])
+                                                self.status = msg[1]+" joined"
                                         else:
                                                 self.users[self.users.index(msg[2])]=msg[1]
+                                                self.status = msg[2]+" is now "+msg[1]
                                         self.drawUI()
                                 elif msg[:6]=='leave ':
                                         msg=msg[6:]
                                         if msg!='None' and msg in self.users:
                                                 self.users.remove(msg)
+                                                self.status = msg+" left"
                                                 self.drawUI()
                                 elif msg[:11]=='challenged ':
                                         msg=msg[11:]
                                         if msg in self.users:
                                                 play_sound("challenger.ogg")
                                                 fade_out()
-                                                TMessage(msg+" has challenged\nyou to a match!\nZ - Accept  X - Don't").run()
+                                                result=ChallengeMessage(self.sock, True, msg).run()
+                                                if isinstance(result, ConnectionError):
+                                                        _song=None
+                                                        play_song("menu.ogg")
+                                                        return
+                                                elif isinstance(result, str):
+                                                        pass
+                                                elif result:
+                                                        self.sock.send("accept")
+                                                        P2Mngr(self.sock, msg).run()
+                                                else:
+                                                        self.sock.send("reject")
+                                                self.sock.send('nicks')
+                                                self.users = self.sock.receive()
+                                                self.drawUI()
+                                                self.draw()
                                                 fade_in()
 
                         for event in pygame.event.get():
@@ -1280,17 +1371,422 @@ class ServerMenu(TetrisMenu):
                                 elif event.type == pygame.KEYDOWN:
                                         self.handle_key(pygame.key.name(event.key))
 
-                        dont_burn_my_cpu.tick(30)
+                        dont_burn_my_cpu.tick(60)
                 play_sound("cancel.ogg")
                 fade_out()
                 self.sock.close()
-                if config['music']:
-                        play_song("menu.ogg")
+                _song=None
+                play_song("menu.ogg")
+
+class TempMessage(TMessage):
+        def __init__(self, msg, time=120):
+                super().__init__(msg)
+                self.timer = time
+
+        def run(self):
+                global bgoffset
+                self.drawUI()
+                self.draw()
+                fade_in()
+                while self.timer:
+                        self.draw()
+                        pygame.display.flip()
+
+                        for event in pygame.event.get():
+                                if event.type == pygame.USEREVENT+3:
+                                        bgoffset = (bgoffset-1) % -config['cell_size']
+                                elif event.type == pygame.QUIT:
+                                        fade_out()
+                                        pygame.quit()
+                                        sys.exit()
+                                elif event.type == pygame.KEYDOWN:
+                                        self.timer=1
+
+                        dont_burn_my_cpu.tick(60)
+                        self.timer-=1
+                play_sound("cancel.ogg")
+                self.quit=False
+                fade_out()
+
+class ChallengeMessage(TMessage):
+        def __init__(self, sock, incoming, challenger):
+                if incoming:
+                        super().__init__(challenger+" has challenged\nyou to a match!\nZ - Accept  X - Don't")
+                else:
+                        super().__init__("Waiting for "+challenger+"...")
+                self.sock = sock
+                self.mode = incoming
+                self.name = challenger
+
+        def run(self):
+                if self.quit:
+                        return
+                global bgoffset
+                self.drawUI()
+                self.draw()
+                fade_in()
+                while not self.quit:
+                        self.draw()
+                        pygame.display.flip()
+                        if self.sock.readable():
+                                try:
+                                        msg=self.sock.receive()
+                                except ConnectionError as e:
+                                        TMessage("The connection\nwas interrupted").run()
+                                        return e
+                                print(msg)
+                                if msg=='recanted':
+                                        play_sound("cancel.ogg")
+                                        fade_out()
+                                        TempMessage(self.name+" withdrew").run()
+                                        return msg
+                                elif msg=='rejected' and not self.mode:
+                                        play_sound("cancel.ogg")
+                                        fade_out()
+                                        TempMessage(self.name+" rejected\nyour challenge.").run()
+                                        return False
+                                elif msg=='accepted' and not self.mode:
+                                        play_sound("ok.ogg")
+                                        fade_out()
+                                        TempMessage(self.name+" accepted\nyour challenge").run()
+                                        return True
+
+                        for event in pygame.event.get():
+                                if event.type == pygame.USEREVENT+3:
+                                        bgoffset = (bgoffset-1) % -config['cell_size']
+                                elif event.type == pygame.QUIT:
+                                        self.sock.close()
+                                        fade_out()
+                                        pygame.quit()
+                                        sys.exit()
+                                elif event.type == pygame.KEYDOWN:
+                                        if self.mode:
+                                                self.handle_key(pygame.key.name(event.key))
+                                        else:
+                                                self.quit=True
+                                                self.sock.send("recant")
+
+                        dont_burn_my_cpu.tick(60)
+                if self.yn:
+                        play_sound("ok.ogg")
+                else:
+                        play_sound("cancel.ogg")
+                fade_out()
+                return self.yn
+
+class P2Mngr(TMessage):
+        def __init__(self, sock, ename):
+                self.sock=sock
+                self.wins=0
+                self.ewins=0
+                self.ename=ename
+                self.quit=False
+                self.ready=False
+
+        def drawUI(self):
+                self.UI=pygame.Surface((config['cell_size']*12, config['cell_size']*6))
+                self.UI.fill((255,255,255))
+                draw_matrix([[17,0,17,0,17],[0],[17,0,17,0,17]], (5.5, 0.5), self.UI)
+                for x in range(self.wins):
+                        draw_matrix([[16]], (5.5+x*2, 0.5), self.UI)
+                for x in range(self.ewins):
+                        draw_matrix([[16]], (5.5+x*2, 2.5), self.UI)
+                draw_text(saveFile, (0.5, 0.5), self.UI)
+                draw_text(self.ename, (0.5, 2.5), self.UI)
+                if self.wins>2:
+                        if self.ewins:
+                                draw_text("You win!", (4, 5), self.UI)
+                        else:
+                                draw_text("Flawless victory!", (1.5, 5), self.UI)
+                elif self.ewins>2:
+                        if self.wins:
+                                draw_text("You lose...", (3.25, 5), self.UI)
+                        else:
+                                draw_text("You stink!", (3.5, 5), self.UI)
+                elif self.ready:
+                        draw_text("Waiting on opponent...", (0.5, 5), self.UI)
+                else:
+                        draw_text("Press Z when ready...", (0.75, 5), self.UI)
+
+        def draw(self):
+                display.blit(bgscroll, (bgoffset, bgoffset))
+                display.blit(self.UI, (4*config['cell_size'], 6*config['cell_size']))
+
+        def run(self):
+                global bgoffset
+                self.drawUI()
+                self.draw()
+                fade_in()
+                while not self.quit:
+                        pygame.display.flip()
+                        if self.sock.readable():
+                                try:
+                                        data=self.sock.receive()
+                                except ConnectionError:
+                                        self.quit=True
+                                        break
+                                if data=='openthegame':
+                                        fade_out()
+                                        game=P2Game(self.sock)
+                                        game.run()
+                                        if game.quit=='withdraw':
+                                                fade_out()
+                                                TempMessage("For shame!\nYou withdrew").run()
+                                                return
+                                        elif game.quit=='ewithdrew':
+                                                fade_out()
+                                                TempMessage(self.ename+" withdrew").run()
+                                                return
+                                        elif isinstance(game.quit, ConnectionError):
+                                                fade_out()
+                                                TempMessage("Lost connection\nto the server").run()
+                                                self.quit=e
+                                                return
+                                        elif game.quit=='gameover':
+                                                self.ewins+=1
+                                        else:
+                                                self.wins+=1
+                                        self.ready=False
+                                        self.drawUI()
+                                        self.draw()
+                                        if self.wins>2:
+                                                pygame.mixer.music.load("music"+os.sep+"win_intro.ogg")
+                                                pygame.mixer.music.set_volume(_mus_vol/100)
+                                                pygame.mixer.music.play(0)
+                                                pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
+                                        elif self.ewins>2:
+                                                pygame.mixer.music.load("music"+os.sep+"loss_intro.ogg")
+                                                pygame.mixer.music.set_volume(_mus_vol/100)
+                                                pygame.mixer.music.play(0)
+                                                pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
+                                        else:
+                                                play_sound("star.ogg")
+                                        del game
+                                        fade_in()
+                                elif data=='withdraw':
+                                        fade_out()
+                                        TempMessage(self.ename+" withdrew").run()
+                                        return
+
+                        for event in pygame.event.get():
+                                if event.type == pygame.USEREVENT+3:
+                                        bgoffset = (bgoffset-1) % -config['cell_size']
+                                elif event.type == pygame.QUIT:
+                                        self.sock.send('withdraw')
+                                        self.sock.close()
+                                        fade_out()
+                                        pygame.quit()
+                                        sys.exit()
+                                elif event.type == pygame.KEYDOWN:
+                                        if self.wins>2 or self.ewins>2:
+                                                self.quit=True
+                                        elif event.key==pygame.K_z:
+                                                self.ready=True
+                                                play_sound("ok.ogg")
+                                                self.sock.send('ready')
+                                                self.drawUI()
+                                elif event.type == pygame.USEREVENT+4:
+                                        if self.wins>2:
+                                                play_song("win.ogg")
+                                        else:
+                                                play_song("loss.ogg")
+                                                
+                        dont_burn_my_cpu.tick(60)
+                        self.draw()
+                play_sound("ok.ogg")
+                fade_out()
+                pygame.mixer.music.fadeout(1000)
+
+class P2Game(TetrisTimed):
+        def __init__(self, sock, level=0):
+                self.sock = sock
+                self.incoming = 0
+                super().__init__(level)
+                self.elvl = 0
+                self.incol = random.randint(0,9)
+                
+        def remove_rows(self, rows):
+                if len(rows)>3:
+                        self.sock.send("clear "+str(len(rows)+self.incoming))
+                elif len(rows):
+                        self.sock.send("clear "+str(len(rows)-1+self.incoming))
+                if self.incoming:
+                        self.incol = random.randint(0,9)
+                        self.incoming=0
+                super().remove_rows(rows)
+
+        def new_stone(self):
+                for x in range(len(self.board)):
+                        if any(self.board[x]):
+                                self.sock.send("height "+str(19-x))
+                                break
+                self.stone=self.next_stone.pop(0)
+                self.next_stone.append(random.choice(tetris_shapes))
+                while self.next_stone[0]==self.next_stone[1]==self.stone:
+                        self.next_stone[1]=random.choice(tetris_shapes)
+                self.stone_x = int(10 / 2 - len(self.stone[0])/2)
+                self.stone_y = 1
+                self.rot_center=[0,1,1,1]
+                self.dropdelay = 15 + self.speed
+                if self.stone==tetris_shapes[5]:
+                        self.rot_center[2]=0
+                for _ in range(self.incoming):
+                        new = [2 for _ in range(10)]
+                        new[self.incol] = 0
+                        self.board.append(new)
+                        del self.board[0]
+                if self.incoming:
+                        play_sound("incominglines.ogg")
+                        self.incoming=0
+                if check_collision(self.board, self.stone, (self.stone_x, self.stone_y)):
+                        self.sock.send("gameover")
+                        self.quit='gameover'
+                        pygame.time.set_timer(pygame.USEREVENT+3, 0)
+                        for x in range(5):
+                                if (x % 2)==1:
+                                        draw_matrix(self.stone, (self.stone_x, self.stone_y-1), self.screen)
+                                else:
+                                        self.screen.fill((200,0,0))
+                                        draw_matrix(self.board, (0,-1), self.screen)
+                                pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
+                                time.sleep(0.4)
+                        pygame.mixer.music.stop()
+                        play_sound("gameover.ogg")
+                        for x in range(17, -1, -1):
+                                draw_matrix([[4 for _ in range(10)]], (0, x), self.screen)
+                                pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
+                                time.sleep(0.02)
+                        time.sleep(0.4)
+                        self.screen.fill((0,0,0))
+                        self.center_msg("Game Over!")
+                        pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
+                        time.sleep(2)
+
+        def drop(self, si=False):
+                if (not (self.quit or self.paused)) and self.dropdelay < self.speed:
+                        self.stone_y += 1
+                        if si:
+                                self.score+=1
+                        if check_collision(self.board,
+                                           self.stone,
+                                           (self.stone_x, self.stone_y)):
+                                self.board = join_matrixes(
+                                  self.board,
+                                  self.stone,
+                                  (self.stone_x, self.stone_y))
+                                play_sound("drop.ogg")
+                                rows=[]
+                                for i in range(len(self.board)):
+                                        if all(self.board[i]) and 14 not in self.board[i]:
+                                                rows.append(i)
+                                if len(rows)>0:
+                                        self.lines+=len(rows)
+                                        self.screen.fill(self.bgcolor)
+                                        draw_matrix(self.board, (0,-1), self.screen)
+                                        self.remove_rows(rows)
+                                        if self.lines>10*(self.level+1):
+                                                self.level_up()
+                                self.new_stone()
+
+        def draw(self):
+                super().draw()
+                draw_matrix([[4] for _ in range(self.elvl)], (0, 18-self.elvl), display)
+
+        def run(self):
+                global bgoffset, _song
+                key_actions = {
+                        pygame.K_LEFT:  lambda:self.move(-1),
+                        pygame.K_RIGHT: lambda:self.move(+1),
+                        pygame.K_DOWN:  lambda:self.drop(True),
+                        pygame.K_z:     lambda:self.rotate_stone(-1),
+                        pygame.K_x:     lambda:self.rotate_stone(+1),
+                        pygame.K_F12:   screenshot
+                }
+
+                self.paused = False
+                self.fade=()
+                debounce = dict.fromkeys(key_actions, False)
+                
+                self.drawUI()
+                self.draw()
+                _song=None
+                play_song("2player.ogg")
+                fade_in()
+                while not self.quit:
+                        self.draw()
+                        pygame.display.flip()
+                        if self.fade:
+                                self.fade[0]=self.fade[0]+1
+                                self.bgcolor=[x + (((y-x)/30)*self.fade[0]) for x,y in zip(self.fade[1], self.fade[2])]
+                                if self.fade[0]==30:
+                                        self.bgcolor=self.fade[2]
+                                        self.fade=()
+                        if self.dropdelay:
+                                self.dropdelay -= 1
+                        else:
+                                self.drop()
+                                self.dropdelay = self.speed
+                        self.timer+=1
+
+                        if self.sock.readable():
+                                try:
+                                        msg=self.sock.receive()
+                                except ConnectionError as e:
+                                        TMessage("The connection\nwas interrupted").run()
+                                        self.quit = e
+                                        return
+                                print(msg)
+                                if msg=='gameover':
+                                        pygame.time.set_timer(pygame.USEREVENT+3, 0)
+                                        play_sound("timeup.ogg")
+                                        self.bgcolor=bg_colors[2]
+                                        self.next_stone=[[[]], [[]]]
+                                        self.draw()
+                                        pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
+                                        time.sleep(1)
+                                        pygame.mixer.music.stop()
+                                        play_sound("gameover.ogg")
+                                        for x in range(17, -1, -1):
+                                                draw_matrix([[1 for _ in range(10)]], (0, x), self.screen)
+                                                pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
+                                                time.sleep(0.02)
+                                        time.sleep(0.4)
+                                        self.screen.fill((0,0,0))
+                                        self.center_msg("Cleared!")
+                                        pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
+                                        time.sleep(2)
+                                        self.quit=True
+                                elif msg[:7]=='height ':
+                                        self.elvl=int(msg[7:])
+                                elif msg[:6]=='lines ':
+                                        self.incoming += int(msg[6:])
+                                        if self.incoming>3:
+                                                play_sound("siren3.ogg")
+                                        elif self.incoming:
+                                                play_sound("siren.ogg")
+                                elif msg=='withdraw':
+                                        self.quit='ewithdrew'
+                                        return
+                        
+                        for event in pygame.event.get():
+                                if event.type == pygame.USEREVENT+3:
+                                        bgoffset = (bgoffset-1) % -config['cell_size']
+                                elif event.type == pygame.QUIT:
+                                        self.sock.send('withdraw')
+                                        self.quit='withdraw'
+                                elif event.type == pygame.KEYDOWN and event.key in key_actions and not debounce[event.key]:
+                                        if not (273 < event.key < 277):
+                                                debounce[event.key] = True
+                                        key_actions[event.key]()
+                                elif event.type == pygame.KEYUP and event.key in key_actions:
+                                        debounce[event.key] = False
+                                        
+                        dont_burn_my_cpu.tick(60)
+                fade_out()
 
 if __name__=="__main__":                        
         pygame.init()
-        if config['music']:
-                pygame.mixer.init()
+        pygame.mixer.init()
         display = pygame.display.set_mode((config['cell_size']*20, config['cell_size']*18))
         pygame.display.set_caption("Tetris DX")
         tiles = [None]
@@ -1304,15 +1800,26 @@ if __name__=="__main__":
                 tiles.insert(x+3, pygame.transform.rotate(tiles[x], 90))
         tiles.insert(13, pygame.Surface((config['cell_size'],config['cell_size'])))
         tiles[13].fill((255,255,255))
-        # Uncomment this when new tiles are added
-        # tiles.insert(15, pygame.Surface((config['cell_size'],config['cell_size'])))
-        # tiles[15].fill((17, 83, 18))
-        # tiles.insert(16, pygame.Surface((config['cell_size'],config['cell_size'])))
-        # tiles[16].fill((135, 168, 123))
-        tiles.insert(17, pygame.Surface((config['cell_size'],config['cell_size'])))
-        tiles[17].fill((193, 221, 243))
+        tiles.insert(15, pygame.Surface((config['cell_size'],config['cell_size'])))
+        tiles[15].fill((193, 221, 243))
+        temp = pygame.Surface((config['cell_size']*2, config['cell_size']*2))
+        temp.fill((255,255,255))
+        temp.blit(tiles[16], (0,0))
+        temp.blit(pygame.transform.flip(tiles[16], True, False), (config['cell_size']*7/8,0))
+        temp.blit(tiles[19], (0,config['cell_size']))
+        temp.blit(pygame.transform.flip(tiles[19], True, False), (config['cell_size']*7/8,config['cell_size']))
+        tiles[16]=temp
+        del tiles[19]
+        temp = pygame.Surface((config['cell_size']*2, config['cell_size']*2))
+        temp.fill((255,255,255))
+        temp.blit(pygame.transform.flip(tiles[17], True, False), (0,0))
+        temp.blit(tiles[17], (config['cell_size']*7/8,0))
+        temp.blit(pygame.transform.flip(tiles[19], True, False), (0,config['cell_size']))
+        temp.blit(tiles[19], (config['cell_size']*7/8,config['cell_size']))
+        tiles[17]=temp
+        del tiles[19]
 
-        pygame.key.set_repeat(200,25)
+        pygame.key.set_repeat(200, 33)
         pygame.event.set_blocked(pygame.MOUSEMOTION)
         _song=None
         highscores=[]
@@ -1333,18 +1840,24 @@ if __name__=="__main__":
                         json.dump(highscores, f)
 
         bgscroll=pygame.Surface((config['cell_size']*21, config['cell_size']*19))
-        draw_matrix([[15+((x+y)%2) for x in range(21)] for y in range(18+config['cell_size'])], (0,0), bgscroll)
+        bgscroll.fill((17,83,18))
+        temp = pygame.Surface((config['cell_size'],config['cell_size']))
+        temp.fill((135, 168, 123))
+        for y in range(19):
+                for x in range(21):
+                        if (x+y) % 2:
+                                bgscroll.blit(temp, (x*config['cell_size'], y*config['cell_size']))
+        del temp
         bgoffset=0
         dont_burn_my_cpu = pygame.time.Clock()
         MarathonLevel = TLevelSelect((TetrisApp, "LVL"), title="Marathon")
-        UltraLevel = TLevelSelect((TetrisTimed, "LVL", 5400), title="Time Attack")
+        UltraLevel = TLevelSelect((TetrisTimed, "LVL", 10800), title="Time Attack")
         LinesLevel = TLevelSelect((TetrisTimed, "LVL", 0, 40, "HIGH"), 9, (0, 2, 4, 6, 8, 10), "40 Lines")
         onePMode = TetrisMenu(["Marathon", "Time Attack", "40 Lines"], [MarathonLevel, UltraLevel, LinesLevel])
         menu = TetrisMenu(["1 Player", "2P Test", "Options", "Scorecard"], [onePMode, ServerMenu, TOptionsMenu(), TPlayerCard()], saveFile)
-        if config['music']:
-                pygame.mixer.music.load("music"+os.sep+"menu_intro.ogg")
-                time.sleep(0.25)
-                pygame.mixer.music.play(0)
-                pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
+        pygame.mixer.music.load("music"+os.sep+"menu_intro.ogg")
+        pygame.mixer.music.set_volume(_mus_vol/100)
+        pygame.mixer.music.play(0)
+        pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
         TFileSelect([x for x in os.listdir("saves")], menu).run()
         pygame.quit()
