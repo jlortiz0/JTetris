@@ -145,15 +145,24 @@ def play_sound(path):
 
 _song=None
 _mus_vol=50
-def play_song(song):
+def play_song(song, startpos=0.0):
         global _song
         if _song==song:
                 return
         _song=song
-        pygame.mixer.music.stop()
         pygame.mixer.music.load("music"+os.sep+song)
         pygame.mixer.music.set_volume(_mus_vol/100)
-        pygame.mixer.music.play(-1)
+        pygame.mixer.music.play(-1, startpos)
+
+def stop_the_music(fade=False):
+        global _song
+        _song=None
+        if fade:
+                pygame.mixer.music.fadeout(1000)
+        else:
+                pygame.mixer.music.stop()
+        # Uncomment in pygame 2.0+
+        #pygame.mixer.music.unload()
 
 def fade_out():
         pygame.time.set_timer(pygame.USEREVENT+3, 0)
@@ -242,7 +251,7 @@ class TetrisApp(TetrisClass):
                                         draw_matrix(self.board, (0,-1), self.screen)
                                 pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                 time.sleep(0.4)
-                        pygame.mixer.music.stop()
+                        stop_the_music()
                         play_sound("gameover.ogg")
                         for x in range(17, -1, -1):
                                 draw_matrix([[4 for _ in range(10)]], (0, x), self.screen)
@@ -494,7 +503,8 @@ class TetrisApp(TetrisClass):
                                         self.dropdelay -= 1
                                 else:
                                         self.drop()
-                                        self.dropdelay = self.speed
+                                        if not self.dropdelay:
+                                                self.dropdelay = self.speed
                         
                         for event in pygame.event.get():
                                 if event.type == pygame.USEREVENT+3:
@@ -531,7 +541,7 @@ class TetrisTimed(TetrisApp):
                         self.draw()
                         pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                         time.sleep(1)
-                        pygame.mixer.music.stop()
+                        stop_the_music()
                         play_sound("gameover.ogg")
                         for x in range(17, -1, -1):
                                 draw_matrix([[1 for _ in range(10)]], (0, x), self.screen)
@@ -625,7 +635,7 @@ class TetrisTimed(TetrisApp):
                                         self.draw()
                                         pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                         time.sleep(1)
-                                        pygame.mixer.music.stop()
+                                        stop_the_music()
                                         play_sound("gameover.ogg")
                                         for x in range(17, -1, -1):
                                                 draw_matrix([[1 for _ in range(10)]], (0, x), self.screen)
@@ -841,18 +851,16 @@ class TLevelSelect(TetrisMenu):
                         game=temp[0](*temp[1:])
                         game.run()
                         if not game.rage:
-                                if saveFile!="Guest":
-                                        saveData=None
-                                        with open("saves"+os.sep+saveFile) as f:
-                                                saveData=json.load(f)
-                                        saveData[3]+=game.lineNums[0]
-                                        saveData[4]+=game.lineNums[1]
-                                        saveData[5]+=game.lineNums[2]
-                                        saveData[6]+=game.lineNums[3]
+                                #saveData=None
+                                with open("saves"+os.sep+saveFile) as f:
+                                        saveData=json.load(f)
+                                saveData[3]+=game.lineNums[0]
+                                saveData[4]+=game.lineNums[1]
+                                saveData[5]+=game.lineNums[2]
+                                saveData[6]+=game.lineNums[3]
                                 if not isinstance(game, TetrisTimed):
                                         score=game.score
-                                        if saveFile!="Guest":
-                                                saveData[0].append(score)
+                                        saveData[0].append(score)
                                         highscores[0][self.selLevel].append((saveFile, score))
                                         for x in range(len(highscores[0][self.selLevel])):
                                                 if score>highscores[0][self.selLevel][x][1]:
@@ -864,8 +872,7 @@ class TLevelSelect(TetrisMenu):
                                 elif game.linec:
                                         if game.lines>game.linesClear-1:
                                                 score=game.timer
-                                                if saveFile!="Guest":
-                                                        saveData[2].append(score)
+                                                saveData[2].append(score)
                                                 highscores[2][self.selLevel][self.selHeight].append((saveFile, score))
                                                 for x in range(len(highscores[2][self.selLevel][self.selHeight])):
                                                         if score<highscores[2][self.selLevel][self.selHeight][x][1]:
@@ -877,8 +884,7 @@ class TLevelSelect(TetrisMenu):
                                 else:
                                         if game.timer<1:
                                                 score=game.score
-                                                if saveFile!="Guest":
-                                                        saveData[1].append(score)
+                                                saveData[1].append(score)
                                                 highscores[1][self.selLevel].append((saveFile, score))
                                                 for x in range(len(highscores[1][self.selLevel])):
                                                         if score>highscores[1][self.selLevel][x][1]:
@@ -887,9 +893,8 @@ class TLevelSelect(TetrisMenu):
                                                                 break
                                                 while len(highscores[1][self.selLevel])>3:
                                                        highscores[1][self.selLevel].pop()
-                                if saveFile!="Guest":
-                                        with open("saves"+os.sep+saveFile, 'w') as f:
-                                                json.dump(saveData, f)
+                                with open("saves"+os.sep+saveFile, 'w') as f:
+                                        json.dump(saveData, f)
                                 save_highscores()
                         del game
                         time.sleep(0.1)
@@ -942,36 +947,40 @@ class FileDeletedException(Exception):
         pass
 
 class TFileSelect(TetrisMenu):
-        def __init__(self, files, action):
-                if "highscore" in files:
-                        files.remove("highscore")
-                super().__init__(files + ["New File...", "Guest"], action, "File Select")
+        def __init__(self, action):
+                super().__init__([], action, "File Select")
+
+        def drawUI(self):
+                self.menu = [x for x in os.listdir("saves")]
+                if "highscore" in self.menu:
+                        self.menu.remove("highscore")
+                self.menu.append("New File...")
+                super().drawUI()
 
         def handle_key(self, key):
                 global _mus_vol, _snd_vol
                 if key=='return' or key=='z':
                         play_sound("ok.ogg")
-                        if self.selected+2==len(self.menu):
+                        if self.selected+1==len(self.menu):
                                 fade_out()
                                 name=TTextInput("Name Entry").run()
                                 if name:
                                         name=name[:10].strip()
-                                        if not (name=="Guest" or os.path.exists("saves"+os.sep+name)):
+                                        if not os.path.exists("saves"+os.sep+name):
                                                 with open("saves"+os.sep+name, 'w') as f:
                                                         json.dump([[],[],[],0,0,0,0,_mus_vol,_snd_vol], f)
                                                 self.menu.insert(-2, name)
-                                                self.drawUI()
+                                self.drawUI()
                                 self.draw()
                                 fade_in()
                         else:
                                 global saveFile
                                 saveFile = self.menu[self.selected]
-                                if saveFile != "Guest":
-                                        with open("saves"+os.sep+saveFile) as f:
-                                                saveData = json.load(f)
-                                        _mus_vol=saveData[7]
-                                        pygame.mixer.music.set_volume(_mus_vol/100)
-                                        _snd_vol=saveData[8]
+                                with open("saves"+os.sep+saveFile) as f:
+                                        saveData = json.load(f)
+                                _mus_vol=saveData[7]
+                                pygame.mixer.music.set_volume(_mus_vol/100)
+                                _snd_vol=saveData[8]
                                 fade_out()
                                 self.actions.title=saveFile
                                 try:
@@ -979,7 +988,8 @@ class TFileSelect(TetrisMenu):
                                 except FileDeletedException:
                                         self.menu.pop(self.selected)
                                         self.selected-=1
-                                        self.drawUI()
+                                        self.selected%=len(self.menu)
+                                self.drawUI()
                                 self.draw()
                                 fade_in()
                 elif key=='escape' or key=='x':
@@ -1090,9 +1100,6 @@ class TPlayerCard(TMessage):
                 super().__init__("")
 
         def run(self):
-                if saveFile=="Guest":
-                        TMessage("Guests cannot\nuse scorecard").run()
-                        return
                 with open("saves"+os.sep+saveFile) as f:
                         saveData = json.load(f)
                 totalLines = sum(saveData[3:7])
@@ -1131,10 +1138,10 @@ class TOptionsMenu(TetrisMenu):
                         if not TMessage("Ok to delete\nfile "+saveFile+"?\nZ-Yes X-No").run():
                                 return
                         os.remove("saves"+os.sep+saveFile)
-                        saveFile="Guest"
+                        saveFile=None
                         TMessage("Save deleted\nReturning to title").run()
                         raise FileDeletedException()
-                super().__init__(["Music Volume: ", "Sound Volume: ", "Erase Highscores", "Erase My File"], ["MUS", "SND", erase_highscores, erase_my_file], "Options")
+                super().__init__(["Music Volume: ", "Sound Volume: ", "Sound Test", "Erase Highscores", "Erase My File"], ["MUS", "SND", SoundTest(), erase_highscores, erase_my_file], "Options")
 
         def handle_key(self, key):
                 global bgoffset, _mus_vol, _snd_vol
@@ -1143,6 +1150,12 @@ class TOptionsMenu(TetrisMenu):
                                 play_sound("ok.ogg")
                                 fade_out()
                                 self.actions[self.selected]()
+                                self.draw()
+                                fade_in()
+                        elif isinstance(self.actions[self.selected], TetrisClass):
+                                play_sound("ok.ogg")
+                                fade_out()
+                                self.actions[self.selected].run()
                                 self.draw()
                                 fade_in()
                         else:
@@ -1182,9 +1195,6 @@ class TOptionsMenu(TetrisMenu):
                 self.menu = temp + self.menu[2:]
 
         def run(self):
-                if saveFile=="Guest":
-                        TMessage("Guests cannot\nchange settings").run()
-                        return
                 super().run()
                 with open("saves"+os.sep+saveFile) as f:
                         saveData = json.load(f)
@@ -1192,6 +1202,62 @@ class TOptionsMenu(TetrisMenu):
                 saveData[8] = _snd_vol
                 with open("saves"+os.sep+saveFile, 'w') as f:
                         json.dump(saveData, f)
+
+class SoundTest(TetrisMenu):
+        def __init__(self):
+                super().__init__(["Music: ", "SE: ", "Stop Music"], [], "Sound Test")
+
+        def drawUI(self):
+                temp = self.menu[:2]
+                self.menu[0]=self.menu[0]+self.musics[self.selmus]
+                self.menu[1]=self.menu[1]+self.sounds[self.selsnd]
+                super().drawUI()
+                self.menu = temp + self.menu[2:]
+
+        def handle_key(self, key):
+                global bgoffset, _mus_vol, _snd_vol
+                if key=='return' or key=='z':
+                        if self.selected==0:
+                                play_song(self.musics[self.selmus], 9.191)
+                        elif self.selected==1:
+                                play_sound(self.sounds[self.selsnd])
+                        elif self.selected==2:
+                                stop_the_music()
+                elif key=='escape' or key=='x':
+                        self.quit=True
+                elif key=='down':
+                        play_sound("select.ogg")
+                        self.selected = (self.selected+1) % len(self.menu)
+                elif key=='up':
+                        play_sound("select.ogg")
+                        self.selected-=1
+                        if self.selected<0:
+                                self.selected=len(self.menu)-1
+                elif key=='left' and self.selected<2:
+                        play_sound("select.ogg")
+                        if self.selected==0:
+                                self.selmus-=1
+                                self.selmus%=len(self.musics)
+                        else:
+                                self.selsnd-=1
+                                self.selsnd%=len(self.sounds)
+                        self.drawUI()
+                elif key=='right' and self.selected<2:
+                        play_sound("select.ogg")
+                        if self.selected==0:
+                                self.selmus+=1
+                                self.selmus%=len(self.musics)
+                        else:
+                                self.selsnd+=1
+                                self.selsnd%=len(self.sounds)
+                        self.drawUI()
+
+        def run(self):
+                self.musics = os.listdir("music")
+                self.sounds = os.listdir("sound")
+                self.selmus = 0
+                self.selsnd = 0
+                super().run()
 
 class ServerMenu(TetrisMenu):
         def __init__(self, sock=None):
@@ -1308,7 +1374,7 @@ class ServerMenu(TetrisMenu):
                         return
                 global bgoffset
                 pygame.mixer.music.set_endevent()
-                pygame.mixer.music.fadeout(1000)
+                stop_the_music(True)
                 self.drawUI()
                 self.draw()
                 fade_in()
@@ -1344,7 +1410,6 @@ class ServerMenu(TetrisMenu):
                                                 fade_out()
                                                 result=ChallengeMessage(self.sock, True, msg).run()
                                                 if isinstance(result, ConnectionError):
-                                                        _song=None
                                                         play_song("menu.ogg")
                                                         return
                                                 elif isinstance(result, str):
@@ -1375,7 +1440,6 @@ class ServerMenu(TetrisMenu):
                 play_sound("cancel.ogg")
                 fade_out()
                 self.sock.close()
-                _song=None
                 play_song("menu.ogg")
 
 class TempMessage(TMessage):
@@ -1595,7 +1659,7 @@ class P2Mngr(TMessage):
                         self.draw()
                 play_sound("ok.ogg")
                 fade_out()
-                pygame.mixer.music.fadeout(1000)
+                stop_the_music(True)
 
 class P2Game(TetrisTimed):
         def __init__(self, sock, level=0):
@@ -1650,7 +1714,7 @@ class P2Game(TetrisTimed):
                                         draw_matrix(self.board, (0,-1), self.screen)
                                 pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                 time.sleep(0.4)
-                        pygame.mixer.music.stop()
+                        stop_the_music()
                         play_sound("gameover.ogg")
                         for x in range(17, -1, -1):
                                 draw_matrix([[4 for _ in range(10)]], (0, x), self.screen)
@@ -1693,7 +1757,7 @@ class P2Game(TetrisTimed):
                 draw_matrix([[4] for _ in range(self.elvl)], (0, 18-self.elvl), display)
 
         def run(self):
-                global bgoffset, _song
+                global bgoffset
                 key_actions = {
                         pygame.K_LEFT:  lambda:self.move(-1),
                         pygame.K_RIGHT: lambda:self.move(+1),
@@ -1709,7 +1773,6 @@ class P2Game(TetrisTimed):
                 
                 self.drawUI()
                 self.draw()
-                _song=None
                 play_song("2player.ogg")
                 fade_in()
                 while not self.quit:
@@ -1744,7 +1807,7 @@ class P2Game(TetrisTimed):
                                         self.draw()
                                         pygame.display.update(pygame.Rect(2*config['cell_size'], 0, 10*config['cell_size'], 18*config['cell_size']))
                                         time.sleep(1)
-                                        pygame.mixer.music.stop()
+                                        stop_the_music()
                                         play_sound("gameover.ogg")
                                         for x in range(17, -1, -1):
                                                 draw_matrix([[1 for _ in range(10)]], (0, x), self.screen)
@@ -1821,7 +1884,6 @@ if __name__=="__main__":
 
         pygame.key.set_repeat(200, 33)
         pygame.event.set_blocked(pygame.MOUSEMOTION)
-        _song=None
         highscores=[]
         saveFile=None
         if not os.path.exists("saves"):
@@ -1854,10 +1916,10 @@ if __name__=="__main__":
         UltraLevel = TLevelSelect((TetrisTimed, "LVL", 10800), title="Time Attack")
         LinesLevel = TLevelSelect((TetrisTimed, "LVL", 0, 40, "HIGH"), 9, (0, 2, 4, 6, 8, 10), "40 Lines")
         onePMode = TetrisMenu(["Marathon", "Time Attack", "40 Lines"], [MarathonLevel, UltraLevel, LinesLevel])
-        menu = TetrisMenu(["1 Player", "2P Test", "Options", "Scorecard"], [onePMode, ServerMenu, TOptionsMenu(), TPlayerCard()], saveFile)
+        menu = TetrisMenu(["1 Player", "2P Test", "Options", "Statistics"], [onePMode, ServerMenu, TOptionsMenu(), TPlayerCard()], saveFile)
         pygame.mixer.music.load("music"+os.sep+"menu_intro.ogg")
         pygame.mixer.music.set_volume(_mus_vol/100)
         pygame.mixer.music.play(0)
         pygame.mixer.music.set_endevent(pygame.USEREVENT+4)
-        TFileSelect([x for x in os.listdir("saves")], menu).run()
+        TFileSelect(menu).run()
         pygame.quit()
